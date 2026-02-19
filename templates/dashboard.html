@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+  <div class="card-header">
+    <div>
+      <h1>Dashboard</h1>
+      <div class="kicker">Your month at a glance: income, spending, budgets, and recent activity.</div>
+    </div>
+
+    <div class="toolbar" style="gap:.5rem; flex-wrap:wrap;">
+      <form method="get" style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
+        <label class="muted">Year</label>
+        <input class="input" name="year" value="{{ year }}" style="width:90px;" />
+
+        <label class="muted">Month</label>
+        <select class="input" name="month" style="width:180px;">
+          {% set months = [
+            (1,"January"),(2,"February"),(3,"March"),(4,"April"),(5,"May"),(6,"June"),
+            (7,"July"),(8,"August"),(9,"September"),(10,"October"),(11,"November"),(12,"December")
+          ] %}
+          {% for mnum, mname in months %}
+            <option value="{{ mnum }}" {% if mnum == month %}selected{% endif %}>{{ mname }}</option>
+          {% endfor %}
+        </select>
+
+        <button class="btn btn-outline btn-sm" type="submit">Go</button>
+      </form>
+
+      <a class="btn btn-primary btn-sm" href="{{ url_for('transactions') }}">Review transactions</a>
+    </div>
+  </div>
+
+  <section class="metrics-grid">
+    <div class="card metric">
+      <div class="label">Income (month)</div>
+      <div class="value">€{{ "%.2f"|format(income) }}</div>
+      <div class="delta muted">Total incoming transactions</div>
+    </div>
+
+    <div class="card metric">
+      <div class="label">Expenses (month)</div>
+      <div class="value">€{{ "%.2f"|format(expenses) }}</div>
+      <div class="delta muted">Total outgoing transactions</div>
+    </div>
+
+    <div class="card metric">
+      <div class="label">Net (month)</div>
+      <div class="value {% if net < 0 %}negative{% else %}positive{% endif %}">
+        €{{ "%.2f"|format(net) }}
+      </div>
+      <div class="delta muted">Income − expenses</div>
+    </div>
+
+    <div class="card metric">
+      <div class="label">Savings rate</div>
+      <div class="value">{{ "%.2f"|format(savings_rate) }}%</div>
+      <div class="delta muted">Net ÷ income</div>
+    </div>
+  </section>
+
+  <div style="height: 1rem;"></div>
+
+  <section class="budget-grid">
+      {% if budget_cards and budget_cards|length > 0 %}
+        {% for b in budget_cards %}
+          <div class="card budget-card">
+            <div class="split">
+              <div style="font-weight:700;">{{ b.category }}</div>
+              <div class="small muted">€{{ "%0.2f"|format(b.spent) }} / €{{ "%0.2f"|format(b.limit) }}</div>
+            </div>
+
+            <div style="height:.6rem;"></div>
+
+            {# progress width: cap at 100 for the bar so it doesn't overflow #}
+            {% set bar = b.pct if b.pct < 100 else 100 %}
+            <div class="progress"><div style="width:{{ bar }}%;"></div></div>
+
+            <div style="height:.6rem;"></div>
+
+            {% if b.status == "overspent" %}
+              <div class="small"><span class="badge">Overspent</span> <span class="muted">{{ "%0.0f"|format(b.pct) }}% used</span></div>
+            {% elif b.status == "near" %}
+              <div class="small"><span class="badge">Near limit</span> <span class="muted">{{ "%0.0f"|format(b.pct) }}% used</span></div>
+            {% else %}
+              <div class="small muted">{{ "%0.0f"|format(b.pct) }}% used · resets monthly</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="card budget-card">
+          <div style="font-weight:700;">No budgets set</div>
+          <div class="muted small">Go to Budgets to set monthly limits.</div>
+        </div>
+      {% endif %}
+    </section>
+
+  <div style="height: 1rem;"></div>
+
+  <div class="card-header">
+    <div>
+      <h2 style="margin:0;">Recent transactions</h2>
+      <div class="kicker">Quick view of your latest activity.</div>
+    </div>
+    <a class="btn btn-outline btn-sm" href="{{ url_for('transactions') }}">See all</a>
+  </div>
+
+  <div class="surface-list">
+    <div class="tx-row tx-head">
+      <div>Date</div><div>Merchant</div><div class="col-category">Category</div><div class="tx-amount">Amount</div><div class="col-account">Account</div>
+    </div>
+
+    {% for tx in recent %}
+    <div class="tx-row">
+      <div class="muted">{{ tx.posted_date }}</div>
+
+      <div>
+        <div style="font-weight:600;">{{ tx.merchant or "—" }}</div>
+        <div class="muted" style="font-size:.85rem;">{{ tx.description or "" }}</div>
+      </div>
+
+      <div class="col-category" style="display:flex; gap:.5rem; align-items:center;">
+        {% if tx.category %}
+          <span class="badge">{{ tx.category.name }}</span>
+        {% else %}
+          <span class="badge">Uncategorized</span>
+        {% endif %}
+      </div>
+
+      <div class="tx-amount {% if tx.amount < 0 %}negative{% else %}positive{% endif %}">
+        €{{ "%.2f"|format(tx.amount) }}
+      </div>
+
+      <div class="muted col-account">
+        {% if tx.account %}{{ tx.account.name }}{% else %}—{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+{% endblock %}

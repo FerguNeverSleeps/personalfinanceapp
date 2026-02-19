@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Import{% endblock %}
+
+{% block content %}
+  <h1>Import CSV</h1>
+  <p class="muted">Upload a bank CSV export. We’ll normalize and store transactions.</p>
+
+
+
+  <div class="card" style="max-width:720px;">
+    <form action="{{ url_for('import_csv') }}" method="post" enctype="multipart/form-data">
+
+      <label class="muted">CSV file</label><br>
+      <input type="file" name="file" accept=".csv,.xls,.xlsx,.txt" required><br><br>
+
+      <label class="muted">Assign to account</label><br>
+      <select name="account_id" class="input" style="width:100%;">
+        <option value="">Auto-detect / none</option>
+        {% for a in accounts %}
+          <option value="{{ a.id }}">{{ a.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="muted" style="margin-top:.35rem; font-size:.9rem;">
+        Tip: choose an account to force assignment. Leave as Auto-detect to use bank detection / account name.
+      </div>
+
+      <div style="height:1rem;"></div>
+
+      <label class="muted">Account name (optional)</label><br>
+      <input class="input" type="text" name="account_name" placeholder="ABN Main" style="width:100%;"><br><br>
+
+      <button class="btn btn-primary" type="submit">Import</button>
+    </form>
+    <div class="toolbar">
+    <a class="btn btn-outline btn-sm" href="{{ url_for('imports_page') }}">
+      View import history
+    </a>
+  </div>
+  </div>
+{% endblock %}

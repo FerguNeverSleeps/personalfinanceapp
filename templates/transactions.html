@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Transactions{% endblock %}
+{% block content %}
+
+  <div class="card-header">
+    <div>
+      <h1>Transactions</h1>
+      <div class="kicker">Label, filter, and turn labels into rules.</div>
+    </div>
+
+    <div class="toolbar">
+      <input class="input" placeholder="Search merchant, note…" />
+      <a class="btn btn-outline btn-sm" href="{{ url_for('dashboard') }}">Back</a>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('import_page') }}">Import</a>
+        <form action="{{ url_for('dev_reset_transactions') }}" method="post" style="display:inline;">
+  <button class="btn btn-outline btn-sm" type="submit"
+          onclick="return confirm('Delete ALL transactions?')">
+    Reset
+  </button>
+
+</form>
+
+        <form action="{{ url_for('dev_recategorize') }}" method="post" style="display:inline;">
+      <button class="btn btn-outline btn-sm" type="submit">
+        Auto-categorize
+      </button>
+        </form>
+
+    </div>
+
+  <a class="btn btn-outline btn-sm" href="{{ url_for('categories_page') }}">Edit categories</a>
+
+
+  </div>
+
+  <div class="surface-list">
+    <div class="tx-row tx-head">
+      <div>Date</div><div>Merchant</div><div class="col-category">Category</div><div class="tx-amount">Amount</div><div class="col-account">Account</div>
+    </div>
+
+
+    {% for tx in transactions %}
+  <div class="tx-row">
+    <div class="muted">{{ tx.posted_date }}</div>
+
+    <div>
+      <div style="font-weight:600;">{{ tx.merchant or "—" }}</div>
+      <div class="muted" style="font-size:.85rem;">
+        {{ clean_note(tx.description or "") }}
+      </div>
+    </div>
+
+
+
+{#dropdown functionality for categories in trasactions#}
+    <div class="col-category">
+  <form method="post" action="{{ url_for('set_tx_category', tx_id=tx.id) }}">
+    <select name="category_id" class="select select-sm" onchange="this.form.submit()">
+      <option value="none" {% if not tx.category %}selected{% endif %}>Uncategorized</option>
+      {% for c in categories %}
+        <option value="{{ c.id }}" {% if tx.category and tx.category.id == c.id %}selected{% endif %}>
+          {{ c.name }}
+        </option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+    <div class="tx-amount {% if tx.amount < 0 %}negative{% else %}positive{% endif %}">
+      €{{ '%.2f'|format(tx.amount) }}
+    </div>
+
+    <div class="muted col-account">
+      {% if tx.account %}{{ tx.account.name }}{% else %}—{% endif %}
+    </div>
+  </div>
+{% endfor %}
+
+  </div>
+
+{% endblock %}

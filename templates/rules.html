@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Rules{% endblock %}
+{% block content %}
+
+<div class="card-header">
+  <div>
+    <h1>Rules</h1>
+    <div class="kicker">Auto-categorize transactions based on merchant or description.</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="rules-head">
+    <div>
+      <h2 style="margin:0;">Add rule</h2>
+      <div class="muted" style="margin-top:.25rem;">
+        Create a rule that matches merchant/description and assigns a category.
+      </div>
+    </div>
+
+    <form method="post" action="{{ url_for('apply_rules_bulk') }}">
+      <button class="btn btn-outline btn-sm" type="submit">Apply all rules</button>
+    </form>
+  </div>
+
+  <form method="post" action="{{ url_for('add_rule') }}" class="rules-grid">
+    <div class="field">
+      <label class="label">Match field</label>
+      <select class="input" name="match_field">
+        <option value="merchant">Merchant</option>
+        <option value="description">Description</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label class="label">Match type</label>
+      <select class="input" name="match_type">
+        <option value="contains">Contains</option>
+        <option value="regex">Regex</option>
+      </select>
+    </div>
+
+    <div class="field span-2">
+      <label class="label">Pattern</label>
+      <input class="input" name="pattern" placeholder="e.g. jumbo, thuisbezorgd, netflix" />
+    </div>
+
+    <div class="field">
+      <label class="label">Set category</label>
+      <select class="input" name="category_id">
+        {% for c in categories %}
+          <option value="{{ c.id }}">{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label class="label">Priority</label>
+      <input class="input" name="priority" type="number" value="100" />
+    </div>
+
+    <div class="field actions">
+      <label class="label" style="visibility:hidden;">Actions</label>
+      <label class="check">
+        <input type="checkbox" name="apply_existing" value="1">
+        Apply to existing
+      </label>
+      <button class="btn btn-primary btn-sm" type="submit">Add rule</button>
+    </div>
+
+    <div class="rules-help muted">
+      Tip: “Contains” is simplest. Use “Regex” only if you need advanced patterns. Lower priority runs first.
+    </div>
+  </form>
+</div>
+
+
+<div class="card" style="margin-top:1rem;">
+  <h2 style="margin-top:0;">Existing rules</h2>
+
+  <div class="surface-list">
+    <div class="tx-row tx-head" style="grid-template-columns: 1.2fr 1fr 1.2fr .8fr .8fr;">
+      <div>Match</div><div>Type</div><div>Category</div><div>Status</div><div>Actions</div>
+    </div>
+
+    {% for r in rules %}
+    <div class="tx-row" style="grid-template-columns: 1.2fr 1fr 1.2fr .8fr .8fr;">
+      <div>
+        <div style="font-weight:600;">{{ r.match_field }}: "{{ r.pattern }}"</div>
+        <div class="muted" style="font-size:.85rem;">Priority: {{ r.priority }}</div>
+      </div>
+
+      <div class="muted">{{ r.match_type }}</div>
+
+      <div><span class="badge">{{ r.category.name }}</span></div>
+
+      <div class="muted">{{ "Active" if r.is_active else "Off" }}</div>
+
+      <div style="display:flex; gap:.5rem;">
+        <form method="post" action="{{ url_for('toggle_rule', rule_id=r.id) }}">
+          <button class="btn btn-outline btn-sm" type="submit">
+            {{ "Disable" if r.is_active else "Enable" }}
+          </button>
+        </form>
+        <form method="post" action="{{ url_for('delete_rule', rule_id=r.id) }}"
+              onsubmit="return confirm('Delete this rule?')">
+          <button class="btn btn-outline btn-sm" type="submit">Delete</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}

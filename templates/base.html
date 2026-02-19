@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Finance UI Template{% endblock %}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<meta name="theme-color" content="#2F80ED">
+
+    <!-- iOS PWA hints -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Finance">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+
+
+</head>
+
+<body>
+  <div class="topbar">
+    <header>
+      <div class="container header-flex">
+        <a href="{{ url_for('dashboard') }}" class="logo-section" style="text-decoration:none;">
+          <div class="app-mark">₿</div>
+          <div class="app-title">
+            <div class="app-name">Finance</div>
+            <div class="app-subtitle">Personal dashboard</div>
+          </div>
+        </a>
+
+        <nav class="nav">
+          <a class="nav-link {% if request.endpoint=='dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a class="nav-link {% if request.endpoint=='transactions' %}active{% endif %}" href="{{ url_for('transactions') }}">Transactions</a>
+          <a class="nav-link {% if request.endpoint=='budgets' %}active{% endif %}" href="{{ url_for('budgets') }}">Budgets</a>
+          <a class="nav-link {% if request.endpoint=='reports' %}active{% endif %}" href="{{ url_for('reports') }}">Reports</a>
+          <a class="nav-link {% if request.endpoint=='connections' %}active{% endif %}" href="{{ url_for('connections') }}">Connections</a>
+        <a class="nav-link {% if request.endpoint=='import_page' %}active{% endif %}"
+
+   href="{{ url_for('import_page') }}">
+  Import CSV
+</a>
+        <a class="nav-link {% if request.endpoint in ['rules_page'] %}active{% endif %}"
+   href="{{ url_for('rules_page') }}">
+  Rules
+</a>
+
+        </nav>
+
+        <div class="user-controls">
+          <a class="btn btn-outline btn-sm" href="{{ url_for('connections') }}">Connect banks</a>
+        </div>
+      </div>
+    </header>
+  </div>
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages">
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="container">
+    <p>© {{ current_year }} Finance UI Template</p>
+  </footer>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("{{ url_for('static', filename='sw.js') }}");
+        });
+      }
+    </script>
+
+</body>
+</html>

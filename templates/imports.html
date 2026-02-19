@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Import history{% endblock %}
+{% block content %}
+
+<div class="card-header">
+  <div>
+    <h1>Import history</h1>
+    <div class="kicker">Undo imports and check what happened.</div>
+  </div>
+  <div class="toolbar">
+    <a class="btn btn-outline btn-sm" href="{{ url_for('import_page') }}">Back to Import</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="surface-list">
+    <div class="tx-row tx-head" style="grid-template-columns: 1.2fr 1fr 1fr 140px;">
+      <div>When</div><div>File</div><div>Inserted / Skipped / Duplicates</div><div></div>
+    </div>
+
+    {% for b in batches %}
+    <div class="tx-row" style="grid-template-columns: 1.2fr 1fr 1fr 140px;">
+      <div class="muted">{{ b.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
+      <div style="font-weight:600;">{{ b.filename or "—" }}</div>
+      <div class="muted">{{ b.rows_inserted }} / {{ b.rows_skipped }} / {{ b.duplicates }}</div>
+      <div style="text-align:right;">
+        <form method="post" action="{{ url_for('undo_import', batch_id=b.id) }}"
+              onsubmit="return confirm('Undo this import? This will delete its transactions.')">
+          <button class="btn btn-outline btn-sm" type="submit">Undo</button>
+        </form>
+      </div>
+    </div>
+
+        <td class="muted">{{ b.tx_count }}</td>
+
+<td style="text-align:right;">
+  {% if b.tx_count == 0 %}
+    <button class="btn btn-outline btn-sm" disabled title="Nothing to undo (0 transactions imported)">Undo</button>
+  {% else %}
+    <form method="post"
+          action="{{ url_for('undo_import', batch_id=b.id) }}"
+          onsubmit="return confirm('Undo import for {{ b.filename or 'file' }}?\nThis will delete {{ b.tx_count }} transactions.');">
+      <button class="btn btn-outline btn-sm" type="submit">Undo</button>
+    </form>
+  {% endif %}
+</td>
+
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}

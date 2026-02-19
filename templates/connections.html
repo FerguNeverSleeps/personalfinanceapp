@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Connections{% endblock %}
+{% block content %}
+
+<div class="card-header">
+  <div>
+    <h1>Connections</h1>
+    <div class="kicker">Manage accounts and imports (bank API later).</div>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Add account</h2>
+
+  <form method="post" action="{{ url_for('add_account') }}" class="toolbar" style="gap:.5rem; flex-wrap:wrap;">
+    <input class="input" name="name" placeholder="Account name (e.g. ABN AMRO)" style="min-width:240px;">
+    <input class="input" name="institution" placeholder="Institution (optional)" style="min-width:220px;">
+    <button class="btn btn-primary btn-sm" type="submit">Add</button>
+    <a class="btn btn-outline btn-sm" href="{{ url_for('import_page') }}">Import CSV</a>
+  </form>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <h2 style="margin-top:0;">Accounts</h2>
+
+  <div class="surface-list" style="margin-top:1rem;">
+    <div class="tx-row tx-head" style="grid-template-columns: 1.3fr 1fr .7fr 220px;">
+      <div>Account</div><div>Institution</div><div>Transactions</div><div style="text-align:right;">Actions</div>
+    </div>
+
+    {% for a, tx_count in rows %}
+      <div class="tx-row" style="grid-template-columns: 1.3fr 1fr .7fr 220px;">
+        <div style="font-weight:600;">{{ a.name }}</div>
+        <div class="muted">{{ a.institution or "—" }}</div>
+        <div class="muted">{{ tx_count }}</div>
+
+        <div style="text-align:right; display:flex; justify-content:flex-end; gap:.5rem;">
+          <a class="btn btn-outline btn-sm" href="{{ url_for('import_page', account_id=a.id) }}">Import</a>
+
+          <form method="post" action="{{ url_for('rename_account', account_id=a.id) }}" style="display:flex; gap:.4rem;">
+            <input class="input" name="name" placeholder="Rename…" style="width:110px;">
+            <button class="btn btn-outline btn-sm" type="submit">Save</button>
+          </form>
+
+          <form method="post" action="{{ url_for('delete_account', account_id=a.id) }}"
+                onsubmit="return confirm('Delete this account? Transactions will be kept but detached.')">
+            <button class="btn btn-outline btn-sm" type="submit">Delete</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}

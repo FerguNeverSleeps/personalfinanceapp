@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+
+<div class="card-header">
+  <div>
+    <h1>Reports</h1>
+    <div class="kicker">Monthly cashflow and spending breakdown.</div>
+  </div>
+
+  <div class="toolbar">
+    <form method="get" class="row" style="display:flex; gap:.5rem; align-items:center;">
+      <label class="muted" style="margin-right:8px;">Year</label>
+      <input name="year" value="{{ year }}" style="width:90px;" class="input">
+
+      <label class="muted" style="margin-left:12px; margin-right:8px;">Month</label>
+      <select name="month" class="input" style="width:160px;">
+        {% set months = [
+          (1,'January'),(2,'February'),(3,'March'),(4,'April'),(5,'May'),(6,'June'),
+          (7,'July'),(8,'August'),(9,'September'),(10,'October'),(11,'November'),(12,'December')
+        ] %}
+        {% for m, label in months %}
+          <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+
+      <button class="btn btn-outline">Go</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Monthly summary</h2>
+
+  <div class="surface-list" style="margin-top:1rem;">
+    <div class="tx-row tx-head" style="grid-template-columns: 1fr 1fr 1fr;">
+      <div>Income</div><div>Expenses</div><div>Net</div>
+    </div>
+
+    <div class="tx-row" style="grid-template-columns: 1fr 1fr 1fr;">
+      <div class="tx-amount positive">€{{ '%.2f'|format(income) }}</div>
+      <div class="tx-amount negative">€{{ '%.2f'|format(expenses) }}</div>
+      <div class="tx-amount {% if net < 0 %}negative{% else %}positive{% endif %}">
+        €{{ '%.2f'|format(net) }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <h2 style="margin-top:0;">Spending by category</h2>
+
+  <div class="surface-list" style="margin-top:1rem;">
+    <div class="tx-row tx-head" style="grid-template-columns: 1.2fr 1fr;">
+      <div>Category</div><div class="tx-amount">Spent</div>
+    </div>
+
+    {% if by_category and by_category|length %}
+      {% for row in by_category %}
+      <div class="tx-row" style="grid-template-columns: 1.2fr 1fr;">
+        <div><span class="badge">{{ row.name }}</span></div>
+        <div class="tx-amount negative">€{{ '%.2f'|format(row.spent) }}</div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="tx-row" style="grid-template-columns: 1fr;">
+        <div class="muted">No expense transactions found for this month.</div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

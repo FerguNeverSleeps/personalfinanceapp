@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Categories{% endblock %}
+{% block content %}
+{#edit categories#}
+<div class="card-header">
+  <div>
+    <h1>Categories</h1>
+    <div class="kicker">Add, rename, or delete categories.</div>
+  </div>
+
+  <div class="toolbar">
+    <a class="btn btn-outline btn-sm" href="{{ url_for('transactions') }}">Back</a>
+  </div>
+</div>
+
+<div class="card" style="padding:16px;">
+  <form method="post" action="{{ url_for('create_category') }}" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    <input class="input" name="name" placeholder="New category (e.g. Leisure)" style="min-width:260px;" />
+    <button class="btn btn-primary btn-sm" type="submit">Add</button>
+  </form>
+
+  <div style="margin-top:16px;">
+    {% for c in categories %}
+      <div style="display:flex; gap:10px; align-items:center; padding:10px 0; border-top:1px solid #eee;">
+        <div style="min-width:180px; font-weight:600;">{{ c.name }}</div>
+
+        <form method="post" action="{{ url_for('rename_category', cat_id=c.id) }}"
+              style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input class="input" name="new_name" placeholder="Rename…" style="min-width:220px;" />
+          <button class="btn btn-outline btn-sm" type="submit">Rename</button>
+        </form>
+
+        <form method="post" action="{{ url_for('delete_category', cat_id=c.id) }}" style="margin-left:auto;">
+          <button class="btn btn-outline btn-sm" type="submit"
+                  onclick="return confirm('Delete {{ c.name }}? Transactions will become Uncategorized.')">
+            Delete
+          </button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Budgets{% endblock %}
+{% block content %}
+
+<div class="card-header">
+  <div>
+    <h1>Budgets</h1>
+    <div class="kicker">Set monthly limits per category and track spending.</div>
+  </div>
+
+  <div class="toolbar">
+    <form method="get" class="row" style="display:flex; gap:.5rem; align-items:center;">
+      <label class="muted" style="margin-right:8px;">Year</label>
+        <input name="year" value="{{ year }}" style="width:90px;" class="input">
+
+        <label class="muted" style="margin-left:12px; margin-right:8px;">Month</label>
+        <select name="month" class="input" style="width:170px;">
+          {% set month_names = [
+            "January","February","March","April","May","June",
+            "July","August","September","October","November","December"
+          ] %}
+          {% for m in range(1, 13) %}
+            <option value="{{ m }}" {% if m == month %}selected{% endif %}>
+              {{ month_names[m-1] }}
+            </option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-outline">Go</button>
+
+    </form>
+  </div>
+</div>
+
+<form method="post" class="surface-list">
+  <div class="tx-row tx-head">
+    <div>Category</div>
+    <div class="tx-amount">Spent</div>
+    <div class="tx-amount">Limit</div>
+    <div class="tx-amount">Remaining</div>
+    <div style="text-align:right;">%</div>
+  </div>
+
+  {% for r in rows %}
+    <div class="tx-row">
+      <div style="font-weight:600;">{{ r.category.name }}</div>
+
+      <div class="tx-amount {% if r.spent > 0 %}negative{% endif %}">
+        €{{ '%.2f'|format(r.spent) }}
+      </div>
+
+      <div class="tx-amount">
+        <input class="input" name="limit_{{ r.category.id }}" value="{{ '%.2f'|format(r.limit) }}"
+               style="width:110px; text-align:right;" />
+      </div>
+
+      <div class="tx-amount {% if r.over %}negative{% else %}positive{% endif %}">
+        €{{ '%.2f'|format(r.remaining) }}
+      </div>
+
+      <div style="text-align:right;">
+        <span class="badge {% if r.over %}badge-danger{% endif %}">{{ r.pct }}%</span>
+      </div>
+    </div>
+  {% endfor %}
+
+  <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+    <button class="btn btn-primary btn-sm" type="submit">Save budgets</button>
+  </div>
+</form>
+
+{% endblock %}
+
