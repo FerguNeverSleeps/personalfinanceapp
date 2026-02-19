@@ -238,6 +238,9 @@ def apply_rules_to_row(merchant: str | None, description: str | None):
     Returns a Category (model) if a rule matches; otherwise None.
     First match by priority wins.
     """
+    merchant = (merchant or "")
+    description = (description or "")
+
     rules = (
         Rule.query
         .filter_by(is_active=True)
@@ -245,26 +248,25 @@ def apply_rules_to_row(merchant: str | None, description: str | None):
         .all()
     )
 
-    m = (merchant or "").lower()
-    d = (description or "").lower()
-
     for r in rules:
-        haystack = m if r.match_field == "merchant" else d
-        needle = (r.pattern or "").lower().strip()
+        hay = merchant if r.match_field == "merchant" else description
+        hay_l = hay.lower()
 
-        if not needle:
+        pat = (r.pattern or "").strip()
+        if not pat:
             continue
 
         if r.match_type == "contains":
-            if needle in haystack:
+            # allow comma-separated keywords: "jumbo, thuisbezorgd"
+            needles = [p.strip().lower() for p in pat.split(",") if p.strip()]
+            if any(n in hay_l for n in needles):
                 return r.category
 
         elif r.match_type == "regex":
             try:
-                if re.search(r.pattern, haystack, flags=re.IGNORECASE):
+                if re.search(pat, hay, flags=re.IGNORECASE):
                     return r.category
             except re.error:
-                # bad regex, ignore rule
                 continue
 
     return None
@@ -643,9 +645,11 @@ def import_csv():
 def imports_page():
     batches = ImportBatch.query.order_by(ImportBatch.created_at.desc()).all()
 
-    # Add tx_count per batch (how many transactions exist for this batch)
+    # Add tx_count per batch (how many transactions exist for this batch) (SQLite friendly)
     for b in batches:
-        b.tx_count = Transaction.query.filter_by(import_batch_id=b.id).count()
+        b.tx_count = db.session.query(func.count(Transaction.id)) \
+            .filter(Transaction.import_batch_id == b.id) \
+            .scalar()
 
     return render_template("imports.html", batches=batches)
 
@@ -966,6 +970,20 @@ def add_rule():
         flash(f"Rule added and applied to {changed} transactions.", "success")
     else:
         flash("Rule added.", "success")
+
+    return redirect(url_for("rules_page"))
+
+@app.post("/rules/test")
+def test_rule():
+    merchant = (request.form.get("merchant") or "").strip()
+    description = (request.form.get("description") or "").strip()
+
+    matched = apply_rules_to_row(merchant, description)
+
+    if matched:
+        flash(f"Matched category: {matched.name}", "success")
+    else:
+        flash("No rule matched.", "info")
 
     return redirect(url_for("rules_page"))
 

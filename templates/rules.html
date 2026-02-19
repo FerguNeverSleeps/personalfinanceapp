@@ -2,12 +2,86 @@
 {% block title %}Rules{% endblock %}
 {% block content %}
 
+
+
 <div class="card-header">
   <div>
     <h1>Rules</h1>
     <div class="kicker">Auto-categorize transactions based on merchant or description.</div>
   </div>
 </div>
+
+    <div class="card" style="margin-bottom:1rem;">
+  <details>
+    <summary style="cursor:pointer; font-weight:600;">How to use Rules (help)</summary>
+    <div style="margin-top:.75rem;" class="muted">
+      <p><b>Rules</b> auto-categorize transactions by matching <b>Merchant</b> or <b>Description</b>.</p>
+
+      <p><b>Match type</b>:</p>
+      <ul>
+        <li><b>Contains</b> (recommended): keyword appears anywhere.</li>
+        <li><b>Regex</b> (advanced): only if you need patterns.</li>
+      </ul>
+
+      <p><b>Priority</b>: lower runs first. When multiple rules match, the first match wins.</p>
+      <ul>
+        <li><b>10</b> = very specific (spotify/uber/netflix)</li>
+        <li><b>100</b> = normal</li>
+        <li><b>200</b> = broad catch-all</li>
+      </ul>
+
+      <p><b>Example</b>: Merchant contains <code>uber</code> → Transport (priority 10)</p>
+    </div>
+  </details>
+</div>
+
+    <div class="card" style="margin-bottom:1rem;">
+  <div class="rules-head">
+    <div>
+      <h2 style="margin:0;">Test rules</h2>
+      <div class="muted" style="margin-top:.25rem;">
+        Try a merchant/description and see what category would be applied (uses priority order).
+      </div>
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('test_rule') }}" class="rules-grid">
+    <div class="field span-2">
+      <label class="label">Merchant</label>
+      <input class="input" name="merchant" placeholder="e.g. uber, spotify, jumbo" />
+    </div>
+
+    <div class="field span-2">
+      <label class="label">Description</label>
+      <input class="input" name="description" placeholder="e.g. iDEAL payment, subscription, BEA Betaalpas ..." />
+    </div>
+
+    <div class="field actions">
+      <label class="label" style="visibility:hidden;">Action</label>
+      <button class="btn btn-outline btn-sm" type="submit">Test</button>
+    </div>
+
+    <div class="rules-help muted">
+      Tip: If multiple rules match, the lowest priority number wins.
+    </div>
+  </form>
+</div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="margin: 1rem 0;">
+          {% for category, message in messages %}
+            <div class="card" style="padding:.75rem 1rem; margin-bottom:.5rem;">
+              <div class="muted" style="font-weight:600; margin-bottom:.25rem;">
+                {{ category|capitalize }}
+              </div>
+              <div>{{ message }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
 
 <div class="card">
   <div class="rules-head">
