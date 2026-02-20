@@ -84,6 +84,40 @@
         });
       }
     </script>
+    <script>
+    function toggleRuleForm(id){
+      const el = document.getElementById(`ruleform-${id}`);
+      if(!el) return;
+      el.style.display = (el.style.display === "none" || !el.style.display) ? "block" : "none";
+    }
+    </script>
+    <script>
+function closeAllRulePopovers() {
+  document.querySelectorAll('.rule-popover').forEach(p => p.style.display = 'none');
+}
+
+function toggleRuleForm(id) {
+  const pop = document.getElementById(`ruleform-${id}`);
+  if (!pop) return;
+
+  const isOpen = pop.style.display === 'block';
+  closeAllRulePopovers();
+  pop.style.display = isOpen ? 'none' : 'block';
+}
+
+// Close when clicking outside
+document.addEventListener('click', function(e) {
+  // if click is inside a rule cell (button or popover), do nothing
+  if (e.target.closest('.rule-cell')) return;
+  closeAllRulePopovers();
+});
+
+// Optional: close with ESC key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeAllRulePopovers();
+});
+</script>
+
 
 </body>
 </html>

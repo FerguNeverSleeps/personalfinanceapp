@@ -568,3 +568,28 @@ footer {
   margin-top: .25rem;
 }
 
+.surface-list, .tx-row { overflow: visible; }
+
+.rule-cell { position: relative; }
+
+.rule-popover{
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: .5rem;
+  width: 380px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.12);
+  padding: 14px;
+  z-index: 50;
+}
+/* One source of truth for the table columns */
+.tx-grid-6 {
+  grid-template-columns: 160px 2fr 220px 140px 180px 140px;
+}
+
+.tx-grid-6{
+  grid-template-columns: 140px 1.6fr 220px 140px 160px 220px;
+}

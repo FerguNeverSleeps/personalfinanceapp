@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from extensions import db
 from models import Account, Transaction, Category, Budget, Rule, ImportBatch  # adjust import path if needed
 from datetime import date
-from sqlalchemy import func, case, and_
+from sqlalchemy import func, case, and_, or_
 from decimal import Decimal
 
 
@@ -411,13 +411,21 @@ def dashboard():
 
 @app.get("/transactions")
 def transactions():
-    txs = Transaction.query.order_by(Transaction.posted_date.desc()).all()
+    view = request.args.get("view", "all")
+
+    q = Transaction.query.order_by(Transaction.posted_date.desc(), Transaction.id.desc())
+    if view == "uncat":
+        q = q.filter(Transaction.category_id.is_(None))
+
+    transactions = q.all()
     categories = Category.query.order_by(Category.name.asc()).all()
+
     return render_template(
         "transactions.html",
-        transactions=txs,
+        transactions=transactions,
         categories=categories,
-        clean_note=clean_note
+        q=q,
+        clean_note=clean_note,
     )
 
 @app.post("/transactions/<int:tx_id>/category")
@@ -916,6 +924,54 @@ def rules_page():
     rules = Rule.query.order_by(Rule.priority.asc(), Rule.id.asc()).all()
     categories = Category.query.order_by(Category.name.asc()).all()
     return render_template("rules.html", rules=rules, categories=categories)
+
+@app.post("/rules/from_tx/<int:tx_id>")
+def rule_from_tx(tx_id):
+    tx = Transaction.query.get_or_404(tx_id)
+
+    match_field = request.form.get("match_field", "merchant")
+    match_type = request.form.get("match_type", "contains")
+    pattern = (request.form.get("pattern") or "").strip()
+    category_id = int(request.form.get("category_id"))
+    priority = int(request.form.get("priority") or 100)
+    apply_existing = request.form.get("apply_existing") == "1"
+
+    if not pattern:
+        flash("Pattern cannot be empty.", "error")
+        return redirect(url_for("transactions"))
+
+    rule = Rule(
+        match_field=match_field,
+        match_type=match_type,
+        pattern=pattern,
+        category_id=category_id,
+        priority=priority,
+        is_active=True,
+    )
+    db.session.add(rule)
+
+    # Optional: apply to existing transactions
+    updated = 0
+    if apply_existing and match_type == "contains":
+        like = f"%{pattern}%"
+        if match_field == "merchant":
+            base = Transaction.query.filter(Transaction.merchant.ilike(like))
+        else:
+            base = Transaction.query.filter(Transaction.description.ilike(like))
+
+        # safest default: only fill uncategorized
+        base = base.filter(Transaction.category_id.is_(None))
+
+        updated = base.update({Transaction.category_id: category_id}, synchronize_session=False)
+
+    db.session.commit()
+
+    if apply_existing:
+        flash(f"Rule created and applied to {updated} existing transactions.", "success")
+    else:
+        flash("Rule created.", "success")
+
+    return redirect(url_for("transactions"))
 
 @app.post("/rules/add")
 def add_rule():

@@ -9,7 +9,12 @@
     </div>
 
     <div class="toolbar">
-      <input class="input" placeholder="Search merchant, note…" />
+      <form method="get" action="{{ url_for('transactions') }}" style="display:inline;">
+  <select class="input" name="view" onchange="this.form.submit()">
+    <option value="all" {% if view == "all" %}selected{% endif %}>All</option>
+    <option value="uncat" {% if view == "uncat" %}selected{% endif %}>Uncategorized only</option>
+  </select>
+    </form>
       <a class="btn btn-outline btn-sm" href="{{ url_for('dashboard') }}">Back</a>
       <a class="btn btn-primary btn-sm" href="{{ url_for('import_page') }}">Import</a>
         <form action="{{ url_for('dev_reset_transactions') }}" method="post" style="display:inline;">
@@ -34,46 +39,94 @@
   </div>
 
   <div class="surface-list">
-    <div class="tx-row tx-head">
-      <div>Date</div><div>Merchant</div><div class="col-category">Category</div><div class="tx-amount">Amount</div><div class="col-account">Account</div>
+    <div class="tx-row tx-head tx-grid-6" style="grid-template-columns: 140px 1.6fr 220px 140px 160px 220px;">
+      <div>Date</div>
+      <div>Merchant</div>
+      <div class="col-category">Category</div>
+      <div class="tx-amount">Amount</div>
+      <div class="col-account">Account</div>
+      <div>Rule</div>
     </div>
 
 
     {% for tx in transactions %}
-  <div class="tx-row">
-    <div class="muted">{{ tx.posted_date }}</div>
+<div class="tx-row tx-grid-6">
+  <!-- 1) Date -->
+  <div class="muted">{{ tx.posted_date }}</div>
 
-    <div>
-      <div style="font-weight:600;">{{ tx.merchant or "—" }}</div>
-      <div class="muted" style="font-size:.85rem;">
-        {{ clean_note(tx.description or "") }}
-      </div>
-    </div>
-
-
-
-{#dropdown functionality for categories in trasactions#}
-    <div class="col-category">
-  <form method="post" action="{{ url_for('set_tx_category', tx_id=tx.id) }}">
-    <select name="category_id" class="select select-sm" onchange="this.form.submit()">
-      <option value="none" {% if not tx.category %}selected{% endif %}>Uncategorized</option>
-      {% for c in categories %}
-        <option value="{{ c.id }}" {% if tx.category and tx.category.id == c.id %}selected{% endif %}>
-          {{ c.name }}
-        </option>
-      {% endfor %}
-    </select>
-  </form>
-</div>
-
-    <div class="tx-amount {% if tx.amount < 0 %}negative{% else %}positive{% endif %}">
-      €{{ '%.2f'|format(tx.amount) }}
-    </div>
-
-    <div class="muted col-account">
-      {% if tx.account %}{{ tx.account.name }}{% else %}—{% endif %}
+  <!-- 2) Merchant -->
+  <div>
+    <div style="font-weight:600;">{{ tx.merchant or "—" }}</div>
+    <div class="muted" style="font-size:.85rem;">
+      {{ clean_note(tx.description or "") }}
     </div>
   </div>
+
+  <!-- 3) Category (THIS WAS MISSING) -->
+  <div class="col-category">
+    <form method="post" action="{{ url_for('set_tx_category', tx_id=tx.id) }}">
+      <select name="category_id" class="select select-sm" onchange="this.form.submit()">
+        <option value="none" {% if not tx.category %}selected{% endif %}>Uncategorized</option>
+        {% for c in categories %}
+          <option value="{{ c.id }}" {% if tx.category and tx.category.id == c.id %}selected{% endif %}>
+            {{ c.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <!-- 4) Amount -->
+  <div class="tx-amount {% if tx.amount < 0 %}negative{% else %}positive{% endif %}">
+    €{{ '%.2f'|format(tx.amount) }}
+  </div>
+
+  <!-- 5) Account -->
+  <div class="muted col-account">
+    {% if tx.account %}{{ tx.account.name }}{% else %}—{% endif %}
+  </div>
+
+  <!-- 6) Rule -->
+  <div class="rule-cell">
+    <button type="button" class="btn btn-outline btn-sm" onclick="toggleRuleForm({{ tx.id }})">
+      Make rule
+    </button>
+
+    <div id="ruleform-{{ tx.id }}" class="rule-popover" style="display:none;">
+      <div class="muted" style="margin-bottom:.5rem; font-weight:600;">Create a rule from this transaction</div>
+
+      <form method="post" action="{{ url_for('rule_from_tx', tx_id=tx.id) }}">
+        <div style="display:flex; gap:.5rem; margin-bottom:.5rem;">
+          <select class="input" name="match_field">
+            <option value="merchant">Merchant</option>
+            <option value="description">Description</option>
+          </select>
+          <select class="input" name="match_type">
+            <option value="contains">Contains</option>
+            <option value="regex">Regex</option>
+          </select>
+        </div>
+
+        <input class="input" name="pattern" value="{{ tx.merchant or '' }}" style="margin-bottom:.5rem;">
+
+        <div style="display:flex; gap:.5rem; margin-bottom:.5rem;">
+          <select class="input" name="category_id">
+            {% for c in categories %}
+              <option value="{{ c.id }}" {% if tx.category and tx.category.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
+          <input class="input" name="priority" type="number" value="100">
+        </div>
+
+        <label class="check" style="margin-bottom:.5rem; display:block;">
+          <input type="checkbox" name="apply_existing" value="1"> Apply to existing (uncategorized)
+        </label>
+
+        <button class="btn btn-primary btn-sm" type="submit">Create rule</button>
+      </form>
+    </div>
+  </div>
+</div>
 {% endfor %}
 
   </div>
