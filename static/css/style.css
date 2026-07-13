@@ -593,3 +593,73 @@ footer {
 .tx-grid-6{
   grid-template-columns: 140px 1.6fr 220px 140px 160px 220px;
 }
+
+.toolbar-stack{
+  display:flex;
+  flex-direction:column;
+  gap:.75rem;
+}
+
+.toolbar-filters{
+  display:flex;
+  gap:.5rem;
+  flex-wrap:wrap;          /* filters can wrap */
+  align-items:center;
+}
+
+
+
+.toolbar-filters select.input{ min-width: 150px; }
+.toolbar-filters input[name="q"]{ min-width: 320px; flex: 1; }
+
+.toolbar-filters input[name="q"]{
+  flex:1;
+  min-width:280px;
+}
+
+
+.toolbar-actions{
+  display:flex;
+  gap:.5rem;
+  justify-content:flex-end;          /* safe on small screens */
+  align-items:center;
+}
+
+.more-menu { position: relative; }
+.more-menu summary { list-style: none; cursor: pointer; }
+.more-menu summary::-webkit-details-marker { display:none; }
+
+.more-panel{
+  position:absolute;
+  right:0;
+  top:calc(100% + .5rem);
+  background:white;
+  border:1px solid rgba(0,0,0,.06);
+  border-radius:14px;
+  padding:.75rem;
+  display:flex;
+  flex-direction:column;
+  gap:.4rem;
+  min-width: 190px;
+  box-shadow: 0 20px 40px rgba(0,0,0,.08);
+  z-index: 50;
+}
+
+.more-panel .btn{
+  width:100%;
+  justify-content:flex-start;
+}
+.more-panel form{ margin:0; }
+
+
+.chart-wrap{
+  height: 320px;       /* pick: 260 / 320 / 400 */
+  width: 100%;
+  position: relative;
+}
+
+.chart-wrap canvas{
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}

@@ -17,10 +17,11 @@ from decimal import Decimal
 from dateutil import parser as dateparser
 from flask import request, redirect, url_for, render_template, flash, abort
 from sqlalchemy.exc import IntegrityError
+from dateutil.relativedelta import relativedelta
 
 from extensions import db
-from models import Account, Transaction, Category, Budget, Rule, ImportBatch  # adjust import path if needed
-from datetime import date
+from models import Account, Transaction, Category, Budget, Rule, ImportBatch, BankConnection  # adjust import path if needed
+from datetime import date, datetime
 from sqlalchemy import func, case, and_, or_
 from decimal import Decimal
 
@@ -282,6 +283,8 @@ def tx_fingerprint(account_id, posted_date, amount, merchant, description):
     raw = "|".join([a, d, amt, m, desc])
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
+
+
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret")
 
@@ -411,20 +414,67 @@ def dashboard():
 
 @app.get("/transactions")
 def transactions():
-    view = request.args.get("view", "all")
+    # --- read filters from URL ---
+    view = request.args.get("view", "all")                # all | uncat
+    search_q = (request.args.get("q") or "").strip()      # free-text
+    account_id = request.args.get("account_id", type=int) # optional
+    category_raw = (request.args.get("category_id") or "").strip()  # "", "none", or id string
+    page = request.args.get("page", 1, type=int)
+    per_page = 50
 
-    q = Transaction.query.order_by(Transaction.posted_date.desc(), Transaction.id.desc())
+    # --- base query ---
+    query = Transaction.query
+
+    # view filter (keeps your existing behavior)
     if view == "uncat":
-        q = q.filter(Transaction.category_id.is_(None))
+        query = query.filter(Transaction.category_id.is_(None))
 
-    transactions = q.all()
+    # account filter
+    if account_id:
+        query = query.filter(Transaction.account_id == account_id)
+
+    # category filter (optional; independent of view)
+    # category_id=none => uncategorized only
+    if category_raw:
+        if category_raw == "none":
+            query = query.filter(Transaction.category_id.is_(None))
+        else:
+            try:
+                category_id = int(category_raw)
+                query = query.filter(Transaction.category_id == category_id)
+            except ValueError:
+                pass
+
+    # search filter
+    if search_q:
+        like = f"%{search_q}%"
+        query = query.filter(
+            or_(
+                Transaction.merchant.ilike(like),
+                Transaction.description.ilike(like),
+            )
+        )
+
+    # ordering
+    query = query.order_by(Transaction.posted_date.desc(), Transaction.id.desc())
+
+    # pagination (Flask-SQLAlchemy)
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    transactions = pagination.items
+
     categories = Category.query.order_by(Category.name.asc()).all()
+    accounts = Account.query.order_by(Account.name.asc()).all()
 
     return render_template(
         "transactions.html",
         transactions=transactions,
+        pagination=pagination,
+        view=view,
+        search_q=search_q,
+        account_id=account_id,
+        category_id=category_raw,
         categories=categories,
-        q=q,
+        accounts=accounts,
         clean_note=clean_note,
     )
 
@@ -452,7 +502,7 @@ def set_tx_category(tx_id: int):
 
 @app.get("/connections")
 def connections():
-    rows = (
+    account_rows = (
         db.session.query(
             Account,
             func.count(Transaction.id).label("tx_count")
@@ -463,8 +513,80 @@ def connections():
         .all()
     )
 
-    # rows = [(Account, tx_count), ...]
-    return render_template("connections.html", rows=rows)
+    connections = (
+        BankConnection.query
+        .order_by(BankConnection.created_at.desc())
+        .all()
+    )
+
+    return render_template(
+        "connections.html",
+        rows=account_rows,
+        connections=connections
+    )
+
+@app.post("/connections/dev-connect")
+def dev_connect_bank():
+    provider = (request.form.get("provider") or "enable_banking").strip()
+    institution_name = (request.form.get("institution_name") or "").strip()
+    account_id_raw = (request.form.get("account_id") or "").strip()
+
+    account = None
+    if account_id_raw:
+        account = Account.query.get(int(account_id_raw))
+
+    if not institution_name:
+        flash("Institution name is required.", "error")
+        return redirect(url_for("connections"))
+
+    conn = BankConnection(
+        provider=provider,
+        institution_name=institution_name,
+        provider_user_id="dev-user",
+        provider_account_id=f"dev-{institution_name.lower().replace(' ', '-')}",
+        account_id=account.id if account else None,
+        status="connected",
+        last_sync_at=datetime.utcnow(),
+    )
+
+    db.session.add(conn)
+    db.session.commit()
+
+    flash(f"Connected {institution_name} (dev mode).", "success")
+    return redirect(url_for("connections"))
+
+#indicate if bank account is disconnected
+@app.post("/connections/<int:connection_id>/disconnect")
+def disconnect_connection(connection_id):
+    conn = BankConnection.query.get_or_404(connection_id)
+    conn.status = "disconnected"
+    db.session.commit()
+
+    flash(f"Disconnected {conn.institution_name}.", "success")
+    return redirect(url_for("connections"))
+
+#This is a temporary fake sync route to test bank connections
+@app.post("/connections/<int:connection_id>/sync")
+def sync_connection(connection_id):
+    conn = BankConnection.query.get_or_404(connection_id)
+
+    if conn.status != "connected":
+        flash("Only connected accounts can be synced.", "error")
+        return redirect(url_for("connections"))
+
+    conn.last_sync_at = datetime.utcnow()
+    db.session.commit()
+
+    flash(f"Sync completed for {conn.institution_name}.", "success")
+    return redirect(url_for("connections"))
+
+@app.post("/connections/<int:connection_id>/reconnect")
+def reconnect_connection(connection_id):
+    conn = BankConnection.query.get_or_404(connection_id)
+    conn.status = "connected"
+    db.session.commit()
+    flash(f"Reconnected {conn.institution_name}.", "success")
+    return redirect(url_for("connections"))
 
 @app.post("/accounts/add")
 def add_account():
@@ -712,7 +834,7 @@ def dev_recategorize():
         if not category:
             category = Category(name=cat_name)
             db.session.add(category)
-            db.session.flush()
+            db.session.flush() #flush() sends pending changes to the database without completing the full transaction.
 
         tx.category_id = category.id
         updated += 1
@@ -834,7 +956,7 @@ def budgets():
         )
         .filter(
             Transaction.posted_date >= start_date,
-            Transaction.posted_date < end_date,
+            Transaction.posted_date <= end_date,
             Transaction.category_id.isnot(None),
         )
         .group_by(Transaction.category_id)
@@ -870,6 +992,7 @@ def budgets():
 def reports():
     year = int(request.args.get("year", date.today().year))
     month = int(request.args.get("month", date.today().month))
+    trend_n = int(request.args.get("trend", 6))  #  3/6/12 toggle
 
     start_date = date(year, month, 1)
     last_day = calendar.monthrange(year, month)[1]
@@ -909,14 +1032,72 @@ def reports():
 
     by_category = [{"name": r.name, "spent": float(r.spent or 0)} for r in rows]
 
+    # --- existing monthly summary code stays the same ---
+    # income, expenses, net, by_category ... (your current logic)
+
+    # ---------------- TREND SERIES (last N months ending selected month) ----------------
+    # helper to step back months
+    def add_months(y, m, delta):
+        m2 = m + delta
+        y2 = y + (m2 - 1) // 12
+        m2 = (m2 - 1) % 12 + 1
+        return y2, m2
+
+    months = []
+    for i in range(trend_n - 1, -1, -1):  # oldest -> newest
+        y2, m2 = add_months(year, month, -i)
+        months.append((y2, m2))
+
+    labels = [f"{y2:04d}-{m2:02d}" for y2, m2 in months]
+
+    dialect = db.engine.dialect.name
+
+    # Group transactions by YYYY-MM
+    if dialect == "sqlite":
+        ym = func.strftime("%Y-%m", Transaction.posted_date)
+    else:
+        # Postgres
+        ym = func.to_char(func.date_trunc("month", Transaction.posted_date), "YYYY-MM")
+
+    trend_rows = (
+        db.session.query(
+            ym.label("ym"),
+            func.coalesce(func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0)), 0).label("income"),
+            func.coalesce(func.sum(case((Transaction.amount < 0, -Transaction.amount), else_=0)), 0).label("expenses"),
+        )
+        .group_by("ym")
+        .all()
+    )
+
+    trend_map = {r.ym: (float(r.income), float(r.expenses)) for r in trend_rows}
+
+    trend_income = []
+    trend_expenses = []
+    net_series = []
+
+    for lab in labels:
+        inc, exp = trend_map.get(lab, (0.0, 0.0))
+        trend_income.append(inc)
+        trend_expenses.append(exp)
+        net_series.append(inc - exp)
+
+    # Optional: trim leading months that are all-zero (keeps your “clean” look)
+    while labels and trend_income[0] == 0 and trend_expenses[0] == 0:
+        labels.pop(0)
+        trend_income.pop(0)
+        trend_expenses.pop(0)
+        net_series.pop(0)
+
     return render_template(
         "reports.html",
-        year=year,
-        month=month,
-        income=income,
-        expenses=expenses,
-        net=net,
-        by_category=by_category
+        year=year, month=month,
+        income=income, expenses=expenses, net=net,
+        by_category=by_category,
+        trend_labels=labels,
+        trend_income=trend_income,
+        trend_expenses=trend_expenses,
+        trend_net=net_series,
+        trend_n=trend_n,
     )
 
 @app.get("/rules")

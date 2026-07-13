@@ -5,49 +5,122 @@
 <div class="card-header">
   <div>
     <h1>Connections</h1>
-    <div class="kicker">Manage accounts and imports (bank API later).</div>
+    <div class="kicker">Manage accounts and linked banks. Live bank API comes next.</div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem;">
+  <h2 style="margin-top:0;">Add account</h2>
+
+  <form method="post" action="{{ url_for('add_account') }}" class="row" style="display:flex; gap:.75rem; align-items:center; flex-wrap:wrap;">
+    <input class="input" type="text" name="name" placeholder="Account name (e.g. ABN Account)" required>
+    <input class="input" type="text" name="institution" placeholder="Institution (optional)">
+    <button class="btn btn-primary" type="submit">Add</button>
+    <a class="btn btn-outline" href="{{ url_for('import_page') }}">Import CSV</a>
+  </form>
+</div>
+
+<div class="card" style="margin-bottom:1rem;">
+  <h2 style="margin-top:0;">Connect bank (dev mode for now)</h2>
+
+  <form method="post" action="{{ url_for('dev_connect_bank') }}" class="row" style="display:flex; gap:.75rem; align-items:center; flex-wrap:wrap;">
+    <select class="input" name="provider" style="min-width:180px;">
+      <option value="enable_banking">Enable Banking</option>
+      <option value="bunq">bunq</option>
+    </select>
+
+    <input class="input" type="text" name="institution_name" placeholder="Institution name (e.g. ABN AMRO)" required>
+
+    <select class="input" name="account_id" style="min-width:220px;">
+      <option value="">Link to existing account (optional)</option>
+      {% for a, tx_count in rows %}
+        <option value="{{ a.id }}">{{ a.name }}</option>
+      {% endfor %}
+    </select>
+
+    <button class="btn btn-primary" type="submit">Connect</button>
+  </form>
+</div>
+
+<div class="card" style="margin-bottom:1rem;">
+  <h2 style="margin-top:0;">Bank connections</h2>
+
+  <div class="surface-list" style="margin-top:1rem;">
+    <div class="tx-row tx-head" style="grid-template-columns: 1.2fr 1fr 1fr 1fr 180px;">
+      <div>Institution</div>
+      <div>Provider</div>
+      <div>Status</div>
+      <div>Last sync</div>
+      <div>Actions</div>
+    </div>
+
+    {% if connections %}
+      {% for c in connections %}
+      <div class="tx-row" style="grid-template-columns: 1.2fr 1fr 1fr 1fr 180px;">
+        <div style="font-weight:600;">{{ c.institution_name or "—" }}</div>
+        <div class="muted">{{ c.provider }}</div>
+        <div>
+          <span class="badge">{{ c.status }}</span>
+        </div>
+        <div class="muted">
+          {% if c.last_sync_at %}
+            {{ c.last_sync_at.strftime("%Y-%m-%d %H:%M") }}
+          {% else %}
+            Never
+          {% endif %}
+        </div>
+        <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+          <form method="post" action="{{ url_for('sync_connection', connection_id=c.id) }}">
+            <button class="btn btn-outline btn-sm" type="submit">Sync</button>
+          </form>
+
+          <form method="post" action="{{ url_for('disconnect_connection', connection_id=c.id) }}">
+            <button class="btn btn-outline btn-sm" type="submit">Disconnect</button>
+          </form>
+            <form method="post" action="{{ url_for('reconnect_connection', connection_id=c.id) }}">
+            <button class="btn btn-outline btn-sm" type="submit">Reconnect</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="tx-row" style="grid-template-columns: 1fr;">
+        <div class="muted">No bank connections yet.</div>
+      </div>
+    {% endif %}
   </div>
 </div>
 
 <div class="card">
-  <h2 style="margin-top:0;">Add account</h2>
-
-  <form method="post" action="{{ url_for('add_account') }}" class="toolbar" style="gap:.5rem; flex-wrap:wrap;">
-    <input class="input" name="name" placeholder="Account name (e.g. ABN AMRO)" style="min-width:240px;">
-    <input class="input" name="institution" placeholder="Institution (optional)" style="min-width:220px;">
-    <button class="btn btn-primary btn-sm" type="submit">Add</button>
-    <a class="btn btn-outline btn-sm" href="{{ url_for('import_page') }}">Import CSV</a>
-  </form>
-</div>
-
-<div class="card" style="margin-top:1rem;">
   <h2 style="margin-top:0;">Accounts</h2>
 
   <div class="surface-list" style="margin-top:1rem;">
-    <div class="tx-row tx-head" style="grid-template-columns: 1.3fr 1fr .7fr 220px;">
-      <div>Account</div><div>Institution</div><div>Transactions</div><div style="text-align:right;">Actions</div>
+    <div class="tx-row tx-head" style="grid-template-columns: 1.2fr 1fr 1fr 220px;">
+      <div>Account</div>
+      <div>Institution</div>
+      <div>Transactions</div>
+      <div>Actions</div>
     </div>
 
     {% for a, tx_count in rows %}
-      <div class="tx-row" style="grid-template-columns: 1.3fr 1fr .7fr 220px;">
-        <div style="font-weight:600;">{{ a.name }}</div>
-        <div class="muted">{{ a.institution or "—" }}</div>
-        <div class="muted">{{ tx_count }}</div>
+    <div class="tx-row" style="grid-template-columns: 1.2fr 1fr 1fr 220px;">
+      <div style="font-weight:600;">{{ a.name }}</div>
+      <div class="muted">{{ a.institution or "—" }}</div>
+      <div class="muted">{{ tx_count }}</div>
+      <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+        <a class="btn btn-outline btn-sm" href="{{ url_for('import_page', account_id=a.id) }}">Import</a>
 
-        <div style="text-align:right; display:flex; justify-content:flex-end; gap:.5rem;">
-          <a class="btn btn-outline btn-sm" href="{{ url_for('import_page', account_id=a.id) }}">Import</a>
+        <form method="post" action="{{ url_for('rename_account', account_id=a.id) }}" style="display:flex; gap:.5rem;">
+          <input class="input" type="text" name="name" placeholder="Rename..." style="width:120px;">
+          <button class="btn btn-outline btn-sm" type="submit">Save</button>
+        </form>
 
-          <form method="post" action="{{ url_for('rename_account', account_id=a.id) }}" style="display:flex; gap:.4rem;">
-            <input class="input" name="name" placeholder="Rename…" style="width:110px;">
-            <button class="btn btn-outline btn-sm" type="submit">Save</button>
-          </form>
-
-          <form method="post" action="{{ url_for('delete_account', account_id=a.id) }}"
-                onsubmit="return confirm('Delete this account? Transactions will be kept but detached.')">
-            <button class="btn btn-outline btn-sm" type="submit">Delete</button>
-          </form>
-        </div>
+        <form method="post" action="{{ url_for('delete_account', account_id=a.id) }}"
+              onsubmit="return confirm('Delete this account? Transactions will be kept but detached.')">
+          <button class="btn btn-outline btn-sm" type="submit">Delete</button>
+        </form>
       </div>
+    </div>
     {% endfor %}
   </div>
 </div>

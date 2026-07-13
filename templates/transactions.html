@@ -8,32 +8,65 @@
       <div class="kicker">Label, filter, and turn labels into rules.</div>
     </div>
 
-    <div class="toolbar">
-      <form method="get" action="{{ url_for('transactions') }}" style="display:inline;">
-  <select class="input" name="view" onchange="this.form.submit()">
-    <option value="all" {% if view == "all" %}selected{% endif %}>All</option>
-    <option value="uncat" {% if view == "uncat" %}selected{% endif %}>Uncategorized only</option>
-  </select>
-    </form>
+    <div class="toolbar toolbar-stack">
+  <!-- Filters row -->
+  <form class="toolbar-filters" method="get" action="{{ url_for('transactions') }}">
+    <select class="input" name="view">
+      <option value="all"  {% if view == "all" %}selected{% endif %}>All</option>
+      <option value="uncat" {% if view == "uncat" %}selected{% endif %}>Uncategorized</option>
+    </select>
+
+    <select class="input" name="account_id">
+      <option value="">All accounts</option>
+      {% for a in accounts %}
+        <option value="{{ a.id }}" {% if account_id == a.id %}selected{% endif %}>{{ a.name }}</option>
+      {% endfor %}
+    </select>
+
+    <select class="input" name="category_id">
+      <option value="">All categories</option>
+      <option value="none" {% if category_id == "none" %}selected{% endif %}>Uncategorized</option>
+      {% for c in categories %}
+        <option value="{{ c.id }}" {% if category_id|int == c.id %}selected{% endif %}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+
+    <input class="input" name="q" value="{{ search_q }}" placeholder="Search merchant, note…" />
+
+    <button class="btn btn-outline btn-sm" type="submit">Search</button>
+
+    {# optional: show a clear button only when something is active #}
+    {% if search_q or account_id or category_id or view != "all" %}
+      <a class="btn btn-outline btn-sm" href="{{ url_for('transactions') }}">Clear</a>
+    {% endif %}
+  </form>
+
+  <!-- Actions row -->
+  <div class="toolbar-actions">
       <a class="btn btn-outline btn-sm" href="{{ url_for('dashboard') }}">Back</a>
       <a class="btn btn-primary btn-sm" href="{{ url_for('import_page') }}">Import</a>
-        <form action="{{ url_for('dev_reset_transactions') }}" method="post" style="display:inline;">
-  <button class="btn btn-outline btn-sm" type="submit"
-          onclick="return confirm('Delete ALL transactions?')">
-    Reset
-  </button>
 
-</form>
+      <details class="more-menu">
+        <summary class="btn btn-outline btn-sm">More</summary>
+        <div class="more-panel">
+          <form action="{{ url_for('dev_recategorize') }}" method="post">
+            <button class="btn btn-outline btn-sm" type="submit">Auto-categorize</button>
+          </form>
 
-        <form action="{{ url_for('dev_recategorize') }}" method="post" style="display:inline;">
-      <button class="btn btn-outline btn-sm" type="submit">
-        Auto-categorize
-      </button>
-        </form>
+          <a class="btn btn-outline btn-sm" href="{{ url_for('categories_page') }}">Edit categories</a>
 
+          <form action="{{ url_for('dev_reset_transactions') }}" method="post">
+            <button class="btn btn-outline btn-sm" type="submit"
+                    onclick="return confirm('Delete ALL transactions?')">
+              Reset
+            </button>
+          </form>
+        </div>
+      </details>
     </div>
+</div>
 
-  <a class="btn btn-outline btn-sm" href="{{ url_for('categories_page') }}">Edit categories</a>
+
 
 
   </div>

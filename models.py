@@ -100,6 +100,27 @@ class ImportBatch(db.Model):
     note = db.Column(db.String(255), nullable=True)
 
 
+class BankConnection(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    provider = db.Column(db.String(50), nullable=False)  # enable_banking / bunq / csv
+    institution_name = db.Column(db.String(120), nullable=True)
+
+    provider_user_id = db.Column(db.String(120), nullable=True)
+    provider_account_id = db.Column(db.String(120), nullable=True)
+
+    account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=True)
+    account = db.relationship("Account", backref=db.backref("bank_connections", lazy=True))
+
+    status = db.Column(db.String(30), nullable=False, default="pending")
+    # pending / connected / expired / error / disconnected
+
+    consent_expires_at = db.Column(db.DateTime, nullable=True)
+    last_sync_at = db.Column(db.DateTime, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
 
 
 

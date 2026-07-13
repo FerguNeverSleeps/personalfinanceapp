@@ -23,6 +23,12 @@
           <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
+        <label>Trend</label>
+  <select class="input" name="trend" onchange="this.form.submit()">
+    <option value="3"  {% if trend_n == 3 %}selected{% endif %}>3 months</option>
+    <option value="6"  {% if trend_n == 6 %}selected{% endif %}>6 months</option>
+    <option value="12" {% if trend_n == 12 %}selected{% endif %}>12 months</option>
+  </select>
 
       <button class="btn btn-outline">Go</button>
     </form>
@@ -44,6 +50,13 @@
         €{{ '%.2f'|format(net) }}
       </div>
     </div>
+  </div>
+</div>
+
+    <div class="muted" style="margin-top:.25rem;">
+        <h2> Trend: Last {{ trend_n }} months ending {{ "%04d-%02d"|format(year, month) }}</h2>
+      <div class="chart-wrap">
+    <canvas id="trendChart"></canvas>
   </div>
 </div>
 
@@ -69,5 +82,49 @@
     {% endif %}
   </div>
 </div>
+
+    <pre>
+trend_labels = {{ trend_labels }}
+trend_income = {{ trend_income }}
+trend_expenses = {{ trend_expenses }}
+trend_net = {{ trend_net }}
+</pre>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+  const labels = {{ trend_labels| default([]) | tojson }};
+  const income = {{ trend_income | default([]) | tojson }};
+  const expenses = {{ trend_expenses | default([]) | tojson }};
+  const net = {{ trend_net | default([]) | tojson }};
+
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Income', data: income, tension: 0.25 },
+        { label: 'Expenses', data: expenses, tension: 0.25 },
+        { label: 'Net', data: net, tension: 0.25 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top' }
+      },
+      scales: {
+        y: {
+          ticks: {
+            callback: (v) => '€' + v
+          }
+        }
+      }
+    }
+  });
+</script>
 
 {% endblock %}
