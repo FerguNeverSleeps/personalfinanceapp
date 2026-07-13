@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+
+# Flask and local databases
+instance/
+*.db
+.env
+
+# Private bank exports and uploads
+uploads/
+*.csv
+*.xls
+*.xlsx
+
+# IDE files
+.idea/
+.vscode/
+
+# Operating system files
+.DS_Store
+Thumbs.db
