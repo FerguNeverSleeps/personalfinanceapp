@@ -272,6 +272,19 @@ def apply_rules_to_row(merchant: str | None, description: str | None):
 
     return None
 
+def month_bounds(year: int, month: int):
+    if month < 1 or month > 12:
+        raise ValueError("Month must be between 1 and 12.")
+
+    start_date = date(year, month, 1)
+
+    if month == 12:
+        next_month = date(year + 1, 1, 1)
+    else:
+        next_month = date(year, month + 1, 1)
+
+    return start_date, next_month
+
 def tx_fingerprint(account_id, posted_date, amount, merchant, description):
     # Normalize to stable strings
     a = str(account_id or "")
@@ -340,19 +353,22 @@ def dashboard():
     year = int(request.args.get("year", date.today().year))
     month = int(request.args.get("month", date.today().month))
 
-    start_date = date(year, month, 1)
-    last_day = calendar.monthrange(year, month)[1]
-    end_date = date(year, month, last_day)
+    # start_date = date(year, month, 1)
+    # last_day = calendar.monthrange(year, month)[1]
+    # end_date = date(year, month, last_day)
+    start_date, next_month = month_bounds(year, month)
 
     # ---- totals (optional, if you want the metrics cards) ----
     income = db.session.query(func.coalesce(func.sum(Transaction.amount), 0))\
         .filter(Transaction.posted_date >= start_date,
-                Transaction.posted_date <= end_date,
+                #Transaction.posted_date <= end_date,
+                Transaction.posted_date < next_month,
                 Transaction.amount > 0).scalar()
 
     expenses = db.session.query(func.coalesce(func.sum(-Transaction.amount), 0))\
         .filter(Transaction.posted_date >= start_date,
-                Transaction.posted_date <= end_date,
+                #Transaction.posted_date <= end_date,
+                Transaction.posted_date < next_month,
                 Transaction.amount < 0).scalar()
 
     net = income - expenses
@@ -375,7 +391,8 @@ def dashboard():
             ), 0).label("spent")
         )
         .filter(Transaction.posted_date >= start_date,
-                Transaction.posted_date <= end_date,
+                #Transaction.posted_date <= end_date,
+                Transaction.posted_date < next_month,
                 Transaction.category_id.isnot(None))
         .group_by(Transaction.category_id)
         .all()
@@ -682,7 +699,8 @@ def import_csv():
         if not account:
             account = Account(name=account_name)
             db.session.add(account)
-            db.session.commit()
+            #keeps the entire import operation inside one database transaction.
+            db.session.flush()
 
     # Auto-detect account if user didn't provide one
     elif rows:
@@ -691,9 +709,23 @@ def import_csv():
             str(r.get("description") or r.get("omschrijving") or r.get("details") or "")
             for r in rows[:10]
         )
+        #This ensures automatically detected
+        # transactions are actually connected to the detected account.
+        # And we actually use the Account Object
+        bank = detect_bank_from_text(probe)
 
-        bank = detect_bank_from_text(probe) or "Unknown bank"
-        account_name = bank
+        if bank:
+            account = Account.query.filter_by(
+                name=bank
+            ).first()
+
+            if not account:
+                account = Account(
+                    name=bank,
+                    institution=bank,
+                )
+                db.session.add(account)
+                db.session.flush()
 
     # Create the batch BEFORE looping
     batch = ImportBatch(
@@ -940,9 +972,10 @@ def budgets():
     year = int(request.args.get("year", date.today().year))
     month = int(request.args.get("month", date.today().month))
 
-    start_date = date(year, month, 1)
-    last_day = calendar.monthrange(year, month)[1]
-    end_date = date(year, month, last_day)
+    # start_date = date(year, month, 1)
+    # last_day = calendar.monthrange(year, month)[1]
+    # end_date = date(year, month, last_day)
+    start_date, next_month = month_bounds(year, month)
 
     categories = Category.query.filter(Category.name != "Transfers").order_by(Category.name).all()
 
@@ -990,7 +1023,8 @@ def budgets():
         )
         .filter(
             Transaction.posted_date >= start_date,
-            Transaction.posted_date <= end_date,
+            #Transaction.posted_date <= end_date,
+            Transaction.posted_date < next_month,
             Transaction.category_id.isnot(None),
         )
         .group_by(Transaction.category_id)
@@ -1028,21 +1062,23 @@ def reports():
     month = int(request.args.get("month", date.today().month))
     trend_n = int(request.args.get("trend", 6))  #  3/6/12 toggle
 
-    start_date = date(year, month, 1)
-    last_day = calendar.monthrange(year, month)[1]
-    end_date = date(year, month, last_day)
+    # start_date = date(year, month, 1)
+    # last_day = calendar.monthrange(year, month)[1]
+    # end_date = date(year, month, last_day)
+    start_date, next_month = month_bounds(year, month)
 
     income = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)) \
         .filter(
             Transaction.posted_date >= start_date,
-            Transaction.posted_date <= end_date,
+            Transaction.posted_date <= next_month,
             Transaction.amount > 0
         ).scalar()
 
     expenses = db.session.query(func.coalesce(func.sum(-Transaction.amount), 0)) \
         .filter(
             Transaction.posted_date >= start_date,
-            Transaction.posted_date <= end_date,
+            #Transaction.posted_date <= end_date,
+            Transaction.posted_date < next_month,
             Transaction.amount < 0
         ).scalar()
 
@@ -1057,7 +1093,8 @@ def reports():
     ).join(Transaction, Transaction.category_id == Category.id) \
      .filter(
          Transaction.posted_date >= start_date,
-         Transaction.posted_date <= end_date,
+         #Transaction.posted_date <= end_date,
+        Transaction.posted_date < next_month,
          Transaction.amount < 0
      ) \
      .group_by(Category.name) \
