@@ -191,12 +191,12 @@ pytest
 ```
 The project tests cover areas such as:
 
--transaction duplicate detection;
--invalid import rows;
--rule priority;
--monthly date filtering;
--budget calculations;
--import undo behavior.
+-transaction duplicate detection
+-invalid import rows
+-rule priority
+-monthly date filtering
+-budget calculations
+-import undo behavior
 
 A manual V1 checklist is available in:
 ```test
