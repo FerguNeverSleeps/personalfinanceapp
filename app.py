@@ -288,6 +288,14 @@ def tx_fingerprint(account_id, posted_date, amount, merchant, description):
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret")
 
+app.config["ENABLE_DEV_TOOLS"] = (
+    os.environ.get("ENABLE_DEV_TOOLS", "false").lower() == "true"
+)
+
+app.config["DEBUG"] = (
+    os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+)
+
 # SQLite locally, but allow Postgres later via DATABASE_URL
 db_url = os.environ.get("DATABASE_URL", "sqlite:///finance.db")
 # Render/Fly often provide postgres URLs starting with postgres://
@@ -300,7 +308,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 #db = SQLAlchemy(app)
 db.init_app(app)
 #app = Flask(__name__)
-app.secret_key = "dev"  # replace for production
+#app.secret_key = "dev"  # replace for production
 
 
 @dataclass
@@ -527,6 +535,8 @@ def connections():
 
 @app.post("/connections/dev-connect")
 def dev_connect_bank():
+    if not app.config["ENABLE_DEV_TOOLS"]:
+        abort(404)
     provider = (request.form.get("provider") or "enable_banking").strip()
     institution_name = (request.form.get("institution_name") or "").strip()
     account_id_raw = (request.form.get("account_id") or "").strip()
@@ -558,6 +568,8 @@ def dev_connect_bank():
 #indicate if bank account is disconnected
 @app.post("/connections/<int:connection_id>/disconnect")
 def disconnect_connection(connection_id):
+    if not app.config["ENABLE_DEV_TOOLS"]:
+        abort(404)
     conn = BankConnection.query.get_or_404(connection_id)
     conn.status = "disconnected"
     db.session.commit()
@@ -568,6 +580,9 @@ def disconnect_connection(connection_id):
 #This is a temporary fake sync route to test bank connections
 @app.post("/connections/<int:connection_id>/sync")
 def sync_connection(connection_id):
+    if not app.config["ENABLE_DEV_TOOLS"]:
+        abort(404)
+
     conn = BankConnection.query.get_or_404(connection_id)
 
     if conn.status != "connected":
@@ -582,6 +597,8 @@ def sync_connection(connection_id):
 
 @app.post("/connections/<int:connection_id>/reconnect")
 def reconnect_connection(connection_id):
+    if not app.config["ENABLE_DEV_TOOLS"]:
+        abort(404)
     conn = BankConnection.query.get_or_404(connection_id)
     conn.status = "connected"
     db.session.commit()
@@ -695,52 +712,62 @@ def import_csv():
 
     for r in rows:
         nr = normalize_transaction_row(r)
-        fp_source = f"{nr['posted_date']}|{nr['amount']}|{nr.get('currency', 'EUR')}|{nr.get('merchant', '')}|{nr.get('description', '')}|{account.id if account else ''}"
-        fingerprint = hashlib.sha256(fp_source.encode("utf-8")).hexdigest()
 
-        # skip if already imported
-        if Transaction.query.filter_by(fingerprint=fingerprint).first():
-            skipped += 1
-            continue
-
+        # Invalid or incomplete row
         if not nr:
             skipped += 1
             continue
 
-        nr["description"] = clean_note(nr.get("description", ""))
-        nr["merchant"] = normalize_merchant_name(nr.get("merchant"))
+        nr["description"] = clean_note(
+            nr.get("description", "")
+        )
+        nr["merchant"] = normalize_merchant_name(
+            nr.get("merchant")
+        )
 
-        # 1) Try rules first
-        matched_category = apply_rules_to_row(nr["merchant"], nr["description"])
-
-        # 2) Fallback to guess_category if no rule
-        if matched_category:
-            category = matched_category
-            cat_name = category.name
-        else:
-            cat_name = guess_category(nr["merchant"], nr["description"])
-            category = Category.query.filter_by(name=cat_name).first()
-            if not category:
-                category = Category(name=cat_name)
-                db.session.add(category)
-                db.session.flush() # gets id without committing
-
+        # Use one verified fingerprint implementation
         fp = tx_fingerprint(
             account.id if account else None,
             nr["posted_date"],
             nr["amount"],
             nr["merchant"],
-            nr["description"]
+            nr["description"],
         )
 
-        # Fast pre-check (optional but nice)
+        # Skip already stored transaction
         exists = Transaction.query.filter_by(
-            account_id=(account.id if account else None),
             fingerprint=fp
         ).first()
+
         if exists:
             duplicates += 1
             continue
+
+        # Try user rules first
+        matched_category = apply_rules_to_row(
+            nr["merchant"],
+            nr["description"],
+        )
+
+        if matched_category:
+            category = matched_category
+        else:
+            category_name = guess_category(
+                nr["merchant"],
+                nr["description"],
+            )
+
+            if category_name == "Uncategorized":
+                category = None
+            else:
+                category = Category.query.filter_by(
+                    name=category_name
+                ).first()
+
+                if not category:
+                    category = Category(name=category_name)
+                    db.session.add(category)
+                    db.session.flush()
 
         tx = Transaction(
             posted_date=nr["posted_date"],
@@ -749,17 +776,21 @@ def import_csv():
             amount=nr["amount"],
             currency=nr["currency"],
             account_id=account.id if account else None,
-            category_id = category.id if category and category.name != "Uncategorized" else None,
-            fingerprint = fp,
+            category_id=category.id if category else None,
+            fingerprint=fp,
             import_batch_id=batch.id,
         )
 
-        db.session.add(tx)
         try:
-            db.session.flush()  # triggers unique constraint early
+            # Savepoint: if this row fails, do not rollback
+            # the complete import batch.
+            with db.session.begin_nested():
+                db.session.add(tx)
+                db.session.flush()
+
             inserted += 1
+
         except IntegrityError:
-            db.session.rollback()  # rollback failed insert only
             duplicates += 1
 
         # store stats on the batch
@@ -804,6 +835,9 @@ def undo_import(batch_id):
 
 @app.post("/dev/reset-transactions")
 def dev_reset_transactions():
+    if not app.config["ENABLE_DEV_TOOLS"]:
+        abort(404)
+
     Transaction.query.delete()
     db.session.commit()
     flash("Deleted all transactions.", "success")
@@ -1266,4 +1300,4 @@ with app.app_context():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=app.config["DEBUG"],)

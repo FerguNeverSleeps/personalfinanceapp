@@ -54,13 +54,14 @@
           </form>
 
           <a class="btn btn-outline btn-sm" href="{{ url_for('categories_page') }}">Edit categories</a>
-
+          {% if config.ENABLE_DEV_TOOLS %}
           <form action="{{ url_for('dev_reset_transactions') }}" method="post">
             <button class="btn btn-outline btn-sm" type="submit"
                     onclick="return confirm('Delete ALL transactions?')">
               Reset
             </button>
           </form>
+          {% endif %}
         </div>
       </details>
     </div>
@@ -95,7 +96,7 @@
     </div>
   </div>
 
-  <!-- 3) Category (THIS WAS MISSING) -->
+  <!-- 3) Category -->
   <div class="col-category">
     <form method="post" action="{{ url_for('set_tx_category', tx_id=tx.id) }}">
       <select name="category_id" class="select select-sm" onchange="this.form.submit()">

@@ -19,7 +19,7 @@
     <a class="btn btn-outline" href="{{ url_for('import_page') }}">Import CSV</a>
   </form>
 </div>
-
+{% if config.ENABLE_DEV_TOOLS %}
 <div class="card" style="margin-bottom:1rem;">
   <h2 style="margin-top:0;">Connect bank (dev mode for now)</h2>
 
@@ -41,6 +41,15 @@
     <button class="btn btn-primary" type="submit">Connect</button>
   </form>
 </div>
+{% else %}
+  <div class="card" style="margin-bottom:1rem;">
+    <h2 style="margin-top:0;">Open Banking</h2>
+    <p class="muted">
+      Provider-independent bank connection architecture is implemented.
+      Live PSD2 authorization and transaction synchronization are planned.
+    </p>
+  </div>
+{% endif %}
 
 <div class="card" style="margin-bottom:1rem;">
   <h2 style="margin-top:0;">Bank connections</h2>
