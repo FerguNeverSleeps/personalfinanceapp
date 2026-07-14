@@ -73,7 +73,6 @@ The application supports duplicate-safe CSV and Excel imports, rule-based transa
 
 V1 is a server-rendered Flask application.
 
-```text
 Browser
    |
    v
@@ -87,6 +86,7 @@ SQLAlchemy models
    |
    v
 SQLite / PostgreSQL
+
 
 ## Transaction processing pipeline
 
