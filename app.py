@@ -1,23 +1,9 @@
 from __future__ import annotations
-
-import hashlib
-import io
-import pandas as pd
 import re
-from typing import Optional
-import calendar
-from dataclasses import dataclass
-
 from flask import Flask, render_template
 import os
-from flask_sqlalchemy import SQLAlchemy
-import csv
-from io import TextIOWrapper
-from decimal import Decimal
-from dateutil import parser as dateparser
 from flask import request, redirect, url_for, render_template, flash, abort
 from sqlalchemy.exc import IntegrityError
-from dateutil.relativedelta import relativedelta
 
 from extensions import db
 from models import Account, Transaction, Category, Budget, Rule, ImportBatch, BankConnection  # adjust import path if needed
@@ -71,24 +57,24 @@ db.init_app(app)
 #app.secret_key = "dev"  # replace for production
 
 
-@dataclass
-class Tx:
-    date: str
-    merchant: str
-    meta: str
-    category: str
-    amount: float
-    account: str
-
-
-def sample_transactions() -> list[Tx]:
-    return [
-        Tx(str(date.today()), "Albert Heijn", "Grocery store · Card payment", "Groceries", -23.45, "ABN •••• 1204"),
-        Tx(str(date.today()), "NS", "Train · OV-chipkaart", "Transport", -9.20, "ING •••• 8841"),
-        Tx(str(date.today()), "Spotify", "Subscription", "Subscriptions", -10.99, "bunq •••• 4412"),
-        Tx(str(date.today()), "Salary", "Employer payout", "Income", 3250.00, "ABN •••• 1204"),
-        Tx(str(date.today()), "Zara", "Clothing", "Shopping", -79.90, "ING •••• 8841"),
-    ]
+# @dataclass
+# class Tx:
+#     date: str
+#     merchant: str
+#     meta: str
+#     category: str
+#     amount: float
+#     account: str
+#
+#
+# def sample_transactions() -> list[Tx]:
+#     return [
+#         Tx(str(date.today()), "Albert Heijn", "Grocery store · Card payment", "Groceries", -23.45, "ABN •••• 1204"),
+#         Tx(str(date.today()), "NS", "Train · OV-chipkaart", "Transport", -9.20, "ING •••• 8841"),
+#         Tx(str(date.today()), "Spotify", "Subscription", "Subscriptions", -10.99, "bunq •••• 4412"),
+#         Tx(str(date.today()), "Salary", "Employer payout", "Income", 3250.00, "ABN •••• 1204"),
+#         Tx(str(date.today()), "Zara", "Clothing", "Shopping", -79.90, "ING •••• 8841"),
+#     ]
 
 
 @app.context_processor

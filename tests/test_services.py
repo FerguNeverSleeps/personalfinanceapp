@@ -9,16 +9,16 @@ def test_same_transaction_produces_same_fingerprint():
         1,
         date(2026, 2, 11),
         Decimal("-28.11"),
-        "Oh My Grill Pizza",
-        "Card payment",
+        "Copper Cup Cafe",
+        "Demo card payment",
     )
 
     second = tx_fingerprint(
         1,
         date(2026, 2, 11),
         Decimal("-28.11"),
-        "Oh My Grill Pizza",
-        "Card payment",
+        "Copper Cup Cafe",
+        "Demo card payment",
     )
 
     assert first == second
