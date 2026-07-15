@@ -1,3 +1,18 @@
+# Description
+Full-stack personal finance app with transaction imports, rule-based categorization, budgets, reports, and duplicate detection.
+
+# Topics 
+- python
+- flask
+- sqlalchemy
+- personal-finance
+- finance-dashboard
+- pandas
+- sqlite
+- chartjs
+- portfolio-project
+
+
 # Personal Finance Dashboard
 
 A full-stack personal finance application for importing, organizing, categorizing, and analyzing bank transactions.
