@@ -662,7 +662,7 @@ def create_category():
     db.session.add(Category(name=name))
     db.session.commit()
     flash(f"Created category: {name}", "success")
-    return redirect(url_for("transactions"))
+    return redirect(url_for("categories_page"))
 
 #Now we will be able to create/rename/and delete categories in the interface
 @app.post("/categories/<int:cat_id>/rename")
@@ -682,20 +682,71 @@ def rename_category(cat_id: int):
     cat.name = new_name
     db.session.commit()
     flash("Category renamed.", "success")
-    return redirect(url_for("transactions"))
+    return redirect(url_for("categories_page"))
 
 
 @app.post("/categories/<int:cat_id>/delete")
 def delete_category(cat_id: int):
-    cat = Category.query.get_or_404(cat_id)
+    category = Category.query.get_or_404(cat_id)
 
-    # Unassign from transactions first (avoid FK errors)
-    Transaction.query.filter_by(category_id=cat.id).update({"category_id": None})
+    try:
+        # Keep transactions but mark them as Uncategorized.
+        transaction_count = Transaction.query.filter_by(
+            category_id=category.id
+        ).count()
 
-    db.session.delete(cat)
-    db.session.commit()
-    flash("Category deleted (transactions set to Uncategorized).", "success")
-    return redirect(url_for("transactions"))
+        Transaction.query.filter_by(
+            category_id=category.id
+        ).update(
+            {"category_id": None},
+            synchronize_session=False,
+        )
+
+        # Rules cannot exist without a category.
+        rule_count = Rule.query.filter_by(
+            category_id=category.id
+        ).count()
+
+        Rule.query.filter_by(
+            category_id=category.id
+        ).delete(
+            synchronize_session=False
+        )
+
+        # Budgets also cannot exist without a category.
+        budget_count = Budget.query.filter_by(
+            category_id=category.id
+        ).count()
+
+        Budget.query.filter_by(
+            category_id=category.id
+        ).delete(
+            synchronize_session=False
+        )
+
+        category_name = category.name
+
+        db.session.delete(category)
+        db.session.commit()
+
+        flash(
+            f'Deleted category "{category_name}". '
+            f"{transaction_count} transactions were set to Uncategorized, "
+            f"{rule_count} rules were removed, and "
+            f"{budget_count} budgets were removed.",
+            "success",
+        )
+
+    except IntegrityError:
+        db.session.rollback()
+
+        flash(
+            "The category could not be deleted because it is still "
+            "referenced by another record.",
+            "error",
+        )
+
+    return redirect(url_for("categories_page"))
 
 @app.route("/budgets", methods=["GET", "POST"])
 def budgets():
