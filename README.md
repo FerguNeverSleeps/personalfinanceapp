@@ -198,6 +198,13 @@ monthly date filtering,
 budget calculations,
 import undo behavior
 
+Current automated tests cover:
+
+- deterministic transaction fingerprints
+- monthly date-boundary calculations
+
+Additional integration tests for imports, rules, budgets, and undo behavior are planned.
+
 
 A manual V1 checklist is available in:
 ```test
