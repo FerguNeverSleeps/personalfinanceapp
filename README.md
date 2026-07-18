@@ -201,8 +201,9 @@ Development tools should remain disabled in public deployments.
 ## Testing
 
 Run the automated tests with:
-```text
-pytest
+
+```bash
+python -m pytest -v
 ```
 The project tests cover areas such as:
 
@@ -215,9 +216,14 @@ import undo behavior
 
 Current automated tests cover:
 
-- deterministic transaction fingerprints
-- monthly date-boundary calculations
+The current unit tests cover:
 
+- deterministic transaction fingerprint generation
+- fingerprint changes when transaction data changes
+- February month boundaries
+- December-to-January year rollover
+- invalid month validation
+  
 Additional integration tests for imports, rules, budgets, and undo behavior are planned.
 
 
