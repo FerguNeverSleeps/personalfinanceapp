@@ -189,7 +189,13 @@ On Terminal run:
 python app.py
 ```
 
-Open the port that will take you into the application
+Then open the local address displayed in the terminal.
+
+By default, the application runs at:
+``` text
+http://127.0.0.1:5000
+```
+The port may differ if it has been changed in the application configuration or is already in use.
 
 ## Development Tools
 
