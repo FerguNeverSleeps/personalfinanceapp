@@ -64,26 +64,6 @@ db.init_app(app)
 #app.secret_key = "dev"  # replace for production
 
 
-# @dataclass
-# class Tx:
-#     date: str
-#     merchant: str
-#     meta: str
-#     category: str
-#     amount: float
-#     account: str
-#
-#
-# def sample_transactions() -> list[Tx]:
-#     return [
-#         Tx(str(date.today()), "Albert Heijn", "Grocery store · Card payment", "Groceries", -23.45, "ABN •••• 1204"),
-#         Tx(str(date.today()), "NS", "Train · OV-chipkaart", "Transport", -9.20, "ING •••• 8841"),
-#         Tx(str(date.today()), "Spotify", "Subscription", "Subscriptions", -10.99, "bunq •••• 4412"),
-#         Tx(str(date.today()), "Salary", "Employer payout", "Income", 3250.00, "ABN •••• 1204"),
-#         Tx(str(date.today()), "Zara", "Clothing", "Shopping", -79.90, "ING •••• 8841"),
-#     ]
-
-
 @app.context_processor
 def inject_now():
     return {"current_year": date.today().year}
@@ -101,13 +81,11 @@ def dashboard():
     # ---- totals (optional, if you want the metrics cards) ----
     income = db.session.query(func.coalesce(func.sum(Transaction.amount), 0))\
         .filter(Transaction.posted_date >= start_date,
-                #Transaction.posted_date <= end_date,
                 Transaction.posted_date < next_month,
                 Transaction.amount > 0).scalar()
 
     expenses = db.session.query(func.coalesce(func.sum(-Transaction.amount), 0))\
         .filter(Transaction.posted_date >= start_date,
-                #Transaction.posted_date <= end_date,
                 Transaction.posted_date < next_month,
                 Transaction.amount < 0).scalar()
 
@@ -131,7 +109,6 @@ def dashboard():
             ), 0).label("spent")
         )
         .filter(Transaction.posted_date >= start_date,
-                #Transaction.posted_date <= end_date,
                 Transaction.posted_date < next_month,
                 Transaction.category_id.isnot(None))
         .group_by(Transaction.category_id)
@@ -680,7 +657,7 @@ def create_category():
 
     if name.lower() == "uncategorized":
         flash("You can't create a category named 'Uncategorized'. Use the default option.", "error")
-        return redirect(url_for("transactions"))
+        return redirect(url_for("categories_page"))
 
     db.session.add(Category(name=name))
     db.session.commit()
@@ -830,7 +807,6 @@ def budgets():
         )
         .filter(
             Transaction.posted_date >= start_date,
-            #Transaction.posted_date <= end_date,
             Transaction.posted_date < next_month,
             Transaction.category_id.isnot(None),
         )
@@ -884,7 +860,7 @@ def reports():
     expenses = db.session.query(func.coalesce(func.sum(-Transaction.amount), 0)) \
         .filter(
             Transaction.posted_date >= start_date,
-            #Transaction.posted_date <= end_date,
+
             Transaction.posted_date < next_month,
             Transaction.amount < 0
         ).scalar()
@@ -900,7 +876,6 @@ def reports():
     ).join(Transaction, Transaction.category_id == Category.id) \
      .filter(
          Transaction.posted_date >= start_date,
-         #Transaction.posted_date <= end_date,
         Transaction.posted_date < next_month,
          Transaction.amount < 0
      ) \
