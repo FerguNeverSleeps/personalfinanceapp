@@ -10,6 +10,9 @@ from models import Account, Transaction, Category, Budget, Rule, ImportBatch, Ba
 from datetime import date, datetime
 from sqlalchemy import func, case, and_, or_
 from decimal import Decimal
+from pathlib import Path
+from dotenv import load_dotenv
+
 
 #to help with organization and less lines of code in the app.py
 # we have separated the helper functions
@@ -29,6 +32,10 @@ from services.rule_service import (
 )
 
 from services.report_service import month_bounds
+
+#load your .env
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
 
 
 app = Flask(__name__)
@@ -603,9 +610,25 @@ def dev_reset_transactions():
     if not app.config["ENABLE_DEV_TOOLS"]:
         abort(404)
 
-    Transaction.query.delete()
-    db.session.commit()
-    flash("Deleted all transactions.", "success")
+    try:
+        # Transactions reference import batches, so delete them first.
+        Transaction.query.delete(synchronize_session=False)
+
+        # Clear old import-history records for a clean demo.
+        ImportBatch.query.delete(synchronize_session=False)
+
+        db.session.commit()
+
+        flash(
+            "Transactions and import history were cleared. "
+            "Rules, categories, budgets, and accounts were preserved.",
+            "success",
+        )
+
+    except Exception:
+        db.session.rollback()
+        flash("The demo data could not be reset.", "error")
+
     return redirect(url_for("transactions"))
 
 @app.get("/categories")

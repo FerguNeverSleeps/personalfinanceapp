@@ -54,6 +54,7 @@
           </form>
 
           <a class="btn btn-outline btn-sm" href="{{ url_for('categories_page') }}">Edit categories</a>
+
           {% if config.ENABLE_DEV_TOOLS %}
           <form action="{{ url_for('dev_reset_transactions') }}" method="post">
             <button class="btn btn-outline btn-sm" type="submit"
