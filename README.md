@@ -1,18 +1,3 @@
-# Description
-Full-stack personal finance app with transaction imports, rule-based categorization, budgets, reports, and duplicate detection.
-
-# Topics 
-- python
-- flask
-- sqlalchemy
-- personal-finance
-- finance-dashboard
-- pandas
-- sqlite
-- chartjs
-- portfolio-project
-
-
 # Personal Finance Dashboard
 
 A full-stack personal finance application for importing, organizing, categorizing, and analyzing bank transactions.
@@ -26,19 +11,37 @@ The application supports duplicate-safe CSV and Excel imports, rule-based transa
 
 ### Dashboard
 
-![Dashboard](docs/screenshots/dashboard.png)
+![Monthly financial dashboard](docs/screenshots/01-dashboard.png)
 
-### Transactions
+### Transaction Management
 
-![Transactions](docs/screenshots/transactions.png)
+![Transaction filtering and categorization](docs/screenshots/02-transactions.png)
 
-### Budgets
+### Rule-Based Categorization
 
-![Budgets](docs/screenshots/budgets.png)
+Rules can be created directly from transactions and optionally applied to
+existing uncategorized records.
 
-### Reports
+![Create a categorization rule](docs/screenshots/03-create-rule.png)
 
-![Reports](docs/screenshots/reports.png)
+![Existing rules and priorities](docs/screenshots/04-existing-rules.png)
+
+### Duplicate-Safe Imports
+
+Reimporting the same statement is detected automatically and creates no
+duplicate transactions.
+
+![Duplicate detection and import history](docs/screenshots/05-duplicate-detection.png)
+
+### Monthly Budgets
+
+![Monthly category budgets](docs/screenshots/07-budgets.png)
+
+### Financial Reports
+
+![Monthly financial report](docs/screenshots/08-reports-summary.png)
+
+![Six-month income, expense, and net trend](docs/screenshots/09-reports-trend.png)
 
 ## Features
 
@@ -204,15 +207,6 @@ Run the automated tests with:
 
 ```bash
 python -m pytest -v
-```
-The project tests cover areas such as:
-
-transaction duplicate detection,
-invalid import rows,
-rule priority,
-monthly date filtering,
-budget calculations,
-import undo behavior
 
 Current automated tests cover:
 
