@@ -3,7 +3,7 @@
 
 {% block content %}
   <h1>Import Bank Transactions</h1>
-  <p class="muted">Upload a bank CSV export. We’ll normalize and store transactions.
+  <p class="muted">Upload a bank statement export. We’ll normalize and store transactions.
     We take all common types: CSV, XLS, XLSX </p>
 
 
@@ -11,7 +11,7 @@
   <div class="card" style="max-width:720px;">
     <form action="{{ url_for('import_csv') }}" method="post" enctype="multipart/form-data">
 
-      <label class="muted">CSV file</label><br>
+      <label class="muted">Transaction file</label><br>
       <input type="file" name="file" accept=".csv,.xls,.xlsx,.txt" required><br><br>
 
       <label class="muted">Assign to account</label><br>
@@ -28,7 +28,7 @@
       <div style="height:1rem;"></div>
 
       <label class="muted">Account name (optional)</label><br>
-      <input class="input" type="text" name="account_name" placeholder="ABN Main" style="width:100%;"><br><br>
+      <input class="input" type="text" name="account_name" placeholder="Optional account name" style="width:100%;"><br><br>
 
       <button class="btn btn-primary" type="submit">Import</button>
     </form>

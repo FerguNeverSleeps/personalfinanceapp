@@ -1,292 +1,53 @@
 from __future__ import annotations
-
-import hashlib
-import io
-import pandas as pd
 import re
-from typing import Optional
-import calendar
-from dataclasses import dataclass
-
 from flask import Flask, render_template
 import os
-from flask_sqlalchemy import SQLAlchemy
-import csv
-from io import TextIOWrapper
-from decimal import Decimal
-from dateutil import parser as dateparser
 from flask import request, redirect, url_for, render_template, flash, abort
 from sqlalchemy.exc import IntegrityError
-from dateutil.relativedelta import relativedelta
 
 from extensions import db
 from models import Account, Transaction, Category, Budget, Rule, ImportBatch, BankConnection  # adjust import path if needed
 from datetime import date, datetime
 from sqlalchemy import func, case, and_, or_
 from decimal import Decimal
+from pathlib import Path
+from dotenv import load_dotenv
 
 
-# helper classes to help proccess import files
-def _norm(s: str) -> str:
-    return re.sub(r"\s+", " ", (s or "").strip().lower())
+#to help with organization and less lines of code in the app.py
+# we have separated the helper functions
+# into a separate folder of services and importing them here
+from services.import_service import (
+    load_rows_auto,
+    normalize_transaction_row,
+    clean_note,
+    normalize_merchant_name,
+    detect_bank_from_text,
+    tx_fingerprint,
+)
 
-def _pick(d: dict, keys: list[str]) -> Optional[str]:
-    # pick first non-empty from possible column names
-    for k in keys:
-        if k in d and str(d[k]).strip() not in ("", "nan", "None"):
-            return str(d[k]).strip()
-    return None
+from services.rule_service import (
+    apply_rules_to_row,
+    guess_category,
+)
 
-def load_rows_auto(file_storage) -> list[dict]:
-    """
-    Reads CSV/XLS/XLSX/TXT and returns a list of dict rows with normalized headers.
-    """
-    filename = (file_storage.filename or "").lower()
-    ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
+from services.report_service import month_bounds
 
-    raw = file_storage.read()
-    file_storage.stream.seek(0)
-
-    if ext in ("xls", "xlsx"):
-        # pandas reads both; engine inferred (openpyxl for xlsx, xlrd for xls)
-        df = pd.read_excel(io.BytesIO(raw))
-
-    else:
-        # CSV/TXT: try utf-8 first; fallback latin-1 if needed
-        try:
-            text = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            text = raw.decode("latin-1", errors="ignore")
-
-        # Let pandas detect delimiter; works for comma/semicolon/tab in most exports
-        df = pd.read_csv(io.StringIO(text), sep=None, engine="python")
-
-    # Normalize column headers
-    df.columns = [_norm(str(c)) for c in df.columns]
-
-    # Convert to list of dicts
-    rows = df.fillna("").to_dict(orient="records")
-    return rows
-
-def extract_merchant_from_description(desc: str) -> str | None:
-    if not desc:
-        return None
-
-    d = str(desc)
-
-    # ABN iDEAL /TRTP style: /NAME/<merchant>/
-    m = re.search(r"/NAME/([^/]+)", d)
-    if m:
-        return m.group(1).strip()
-
-    # ABN card payments often look like:
-    # "BEA, Betaalpas   PRIMARK ENSCHEDE,PAS954 ..."
-    m = re.search(r"BEA,\s*Betaalpas\s+(.+?),PAS", d, flags=re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-
-    # Fallback: first chunk before comma (rough but useful)
-    first = d.split(",")[0].strip()
-    return first if first else None
-
-
-def normalize_transaction_row(r: dict) -> Optional[dict]:
-    # ABN headers are like transactiondate / valuedate (no space)
-    date_raw = _pick(r, [
-        "transactiondate", "valuedate",
-        "date", "transaction date", "booking date",
-        "boekingsdatum", "datum",
-        "value date", "valuta datum", "valutadatum"
-    ])
-
-    amount_raw = _pick(r, [
-        "amount", "bedrag", "mutatie", "transaction amount"
-    ])
-
-    desc = _pick(r, [
-        "description", "omschrijving", "details", "remittance information", "note"
-    ])
-
-    currency = _pick(r, ["currency", "valuta", "mutationcode"]) or "EUR"
-
-    if not date_raw or not amount_raw:
-        return None
-
-    # Parse date like 20260110
-    posted_date = dateparser.parse(str(date_raw)).date()
-
-    # Parse amount, handle comma decimals
-    a = str(amount_raw).replace("€", "").replace("\u20ac", "").replace(" ", "")
-    if a.count(",") == 1 and a.count(".") == 0:
-        a = a.replace(",", ".")
-    a = a.replace(",", "")
-    try:
-        amount = Decimal(a)
-    except Exception:
-        return None
-
-    merchant = extract_merchant_from_description(desc)
-
-    return {
-        "posted_date": posted_date,
-        "merchant": merchant,
-        "description": desc,
-        "amount": amount,
-        "currency": currency
-    }
-#helper function to delete txt when importing records
-def clean_note(desc: str) -> str:
-    if not desc:
-        return ""
-
-    d = str(desc)
-
-    # Remove structured slash sections like /TRTP/... /IBAN/... /BIC/... etc.
-    d = re.sub(r"/(TRTP|IBAN|BIC|NAME|REMI|EREF)/[^/]*", "", d)
-    d = re.sub(r"/(iDEAL|SEPA|Wero)\b", "", d)
-
-    # Remove long IDs / references (8+ digits or long alphanumerics)
-    d = re.sub(r"\b[A-Z0-9]{14,}\b", "", d)
-    d = re.sub(r"\b\d{8,}\b", "", d)
-
-    # Normalize whitespace/slashes
-    d = d.replace("/", " ")
-    d = re.sub(r"\s+", " ", d).strip()
-
-    return d[:140] + "…" if len(d) > 140 else d
-
-
-#helper class to get cleaner categories
-def guess_category(merchant: str, desc: str) -> str:
-    text = f"{merchant or ''} {desc or ''}".lower()
-    if "tikkie" in text:
-        return "Transfers"
-    if any(k in text for k in ["ns", "ov", "uber", "bolt"]):
-        return "Transport"
-    if any(k in text for k in ["netflix", "spotify", "apple", "google", "amazon"]):
-        return "Subscriptions"
-
-    if any(k in text for k in ["jumbo", "albert heijn", "ah ", "lidl", "aldi", "plus", "dirk"]):
-        return "Groceries"
-    if any(k in text for k in ["takeaway", "thuisbezorgd", "ubereats", "deliveroo", "restaurant", "cafe", "pizza"]):
-        return "Dining out"
-
-    if any(k in text for k in
-           ["cinema", "movie", "bar", "club", "bowling", "game", "steam", "playstation", "ticketmaster"]):
-        return "Leisure"
-
-    if any(k in text for k in ["betaalpas", "pas", "bea,"]):
-        # usually card payments -> don't auto-pick category by this alone,
-        # but it helps for merchant keywords present in same line
-        pass
-
-    return "Uncategorized"
-
-def normalize_merchant_name(name: str | None) -> str | None:
-    if not name:
-        return None
-    n = str(name).strip()
-    n = re.sub(r"\s+via\s+.*$", "", n, flags=re.IGNORECASE)  # remove "via ..."
-    n = re.sub(r"\s+", " ", n).strip()
-    return n
-
-def detect_bank_from_text(text: str) -> str | None:
-    """Detect bank based on IBAN/BIC patterns in description or other strings."""
-    if not text:
-        return None
-
-    t = str(text).upper()
-
-    # BIC patterns
-    if "ABNANL2A" in t or "ABNA" in t and "NL" in t:
-        return "ABN AMRO"
-    if "INGBNL2A" in t or "INGB" in t and "NL" in t:
-        return "ING"
-    if "BUNQNL2A" in t or "BUNQ" in t and "NL" in t:
-        return "bunq"
-
-    # IBAN bank-code patterns (NL IBAN format: NLkk + 4 bank letters)
-    # Example: NL31ABNA...
-    m = re.search(r"\bNL\d{2}([A-Z]{4})\b", t)
-    if m:
-        code = m.group(1)
-        return {
-            "ABNA": "ABN AMRO",
-            "INGB": "ING",
-            "BUNQ": "bunq",
-            # add more as you need
-        }.get(code)
-
-    return None
-
-
-def extract_iban_last4(text: str) -> str | None:
-    """Extract last 4 digits of IBAN (useful for naming accounts)."""
-    if not text:
-        return None
-    t = str(text).upper().replace(" ", "")
-
-    # Find an IBAN-like substring NL..ABNA.... (basic)
-    m = re.search(r"(NL\d{2}[A-Z]{4}[0-9A-Z]{10,30})", t)
-    if not m:
-        return None
-    iban = m.group(1)
-    # last 4 chars of IBAN (often digits, sometimes alnum)
-    return iban[-4:] if len(iban) >= 4 else None
-
-def apply_rules_to_row(merchant: str | None, description: str | None):
-    """
-    Returns a Category (model) if a rule matches; otherwise None.
-    First match by priority wins.
-    """
-    merchant = (merchant or "")
-    description = (description or "")
-
-    rules = (
-        Rule.query
-        .filter_by(is_active=True)
-        .order_by(Rule.priority.asc(), Rule.id.asc())
-        .all()
-    )
-
-    for r in rules:
-        hay = merchant if r.match_field == "merchant" else description
-        hay_l = hay.lower()
-
-        pat = (r.pattern or "").strip()
-        if not pat:
-            continue
-
-        if r.match_type == "contains":
-            # allow comma-separated keywords: "jumbo, thuisbezorgd"
-            needles = [p.strip().lower() for p in pat.split(",") if p.strip()]
-            if any(n in hay_l for n in needles):
-                return r.category
-
-        elif r.match_type == "regex":
-            try:
-                if re.search(pat, hay, flags=re.IGNORECASE):
-                    return r.category
-            except re.error:
-                continue
-
-    return None
-
-def tx_fingerprint(account_id, posted_date, amount, merchant, description):
-    # Normalize to stable strings
-    a = str(account_id or "")
-    d = posted_date.isoformat() if posted_date else ""
-    amt = f"{amount:.2f}" if amount is not None else ""
-    m = (merchant or "").strip().lower()
-    desc = (description or "").strip().lower()
-
-    raw = "|".join([a, d, amt, m, desc])
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
+#load your .env
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
 
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret")
+
+app.config["ENABLE_DEV_TOOLS"] = (
+    os.environ.get("ENABLE_DEV_TOOLS", "false").lower() == "true"
+)
+
+app.config["DEBUG"] = (
+    os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+)
 
 # SQLite locally, but allow Postgres later via DATABASE_URL
 db_url = os.environ.get("DATABASE_URL", "sqlite:///finance.db")
@@ -300,27 +61,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 #db = SQLAlchemy(app)
 db.init_app(app)
 #app = Flask(__name__)
-app.secret_key = "dev"  # replace for production
-
-
-@dataclass
-class Tx:
-    date: str
-    merchant: str
-    meta: str
-    category: str
-    amount: float
-    account: str
-
-
-def sample_transactions() -> list[Tx]:
-    return [
-        Tx(str(date.today()), "Albert Heijn", "Grocery store · Card payment", "Groceries", -23.45, "ABN •••• 1204"),
-        Tx(str(date.today()), "NS", "Train · OV-chipkaart", "Transport", -9.20, "ING •••• 8841"),
-        Tx(str(date.today()), "Spotify", "Subscription", "Subscriptions", -10.99, "bunq •••• 4412"),
-        Tx(str(date.today()), "Salary", "Employer payout", "Income", 3250.00, "ABN •••• 1204"),
-        Tx(str(date.today()), "Zara", "Clothing", "Shopping", -79.90, "ING •••• 8841"),
-    ]
+#app.secret_key = "dev"  # replace for production
 
 
 @app.context_processor
@@ -332,19 +73,20 @@ def dashboard():
     year = int(request.args.get("year", date.today().year))
     month = int(request.args.get("month", date.today().month))
 
-    start_date = date(year, month, 1)
-    last_day = calendar.monthrange(year, month)[1]
-    end_date = date(year, month, last_day)
+    # start_date = date(year, month, 1)
+    # last_day = calendar.monthrange(year, month)[1]
+    # end_date = date(year, month, last_day)
+    start_date, next_month = month_bounds(year, month)
 
     # ---- totals (optional, if you want the metrics cards) ----
     income = db.session.query(func.coalesce(func.sum(Transaction.amount), 0))\
         .filter(Transaction.posted_date >= start_date,
-                Transaction.posted_date <= end_date,
+                Transaction.posted_date < next_month,
                 Transaction.amount > 0).scalar()
 
     expenses = db.session.query(func.coalesce(func.sum(-Transaction.amount), 0))\
         .filter(Transaction.posted_date >= start_date,
-                Transaction.posted_date <= end_date,
+                Transaction.posted_date < next_month,
                 Transaction.amount < 0).scalar()
 
     net = income - expenses
@@ -367,7 +109,7 @@ def dashboard():
             ), 0).label("spent")
         )
         .filter(Transaction.posted_date >= start_date,
-                Transaction.posted_date <= end_date,
+                Transaction.posted_date < next_month,
                 Transaction.category_id.isnot(None))
         .group_by(Transaction.category_id)
         .all()
@@ -527,6 +269,8 @@ def connections():
 
 @app.post("/connections/dev-connect")
 def dev_connect_bank():
+    if not app.config["ENABLE_DEV_TOOLS"]:
+        abort(404)
     provider = (request.form.get("provider") or "enable_banking").strip()
     institution_name = (request.form.get("institution_name") or "").strip()
     account_id_raw = (request.form.get("account_id") or "").strip()
@@ -558,6 +302,8 @@ def dev_connect_bank():
 #indicate if bank account is disconnected
 @app.post("/connections/<int:connection_id>/disconnect")
 def disconnect_connection(connection_id):
+    if not app.config["ENABLE_DEV_TOOLS"]:
+        abort(404)
     conn = BankConnection.query.get_or_404(connection_id)
     conn.status = "disconnected"
     db.session.commit()
@@ -568,6 +314,9 @@ def disconnect_connection(connection_id):
 #This is a temporary fake sync route to test bank connections
 @app.post("/connections/<int:connection_id>/sync")
 def sync_connection(connection_id):
+    if not app.config["ENABLE_DEV_TOOLS"]:
+        abort(404)
+
     conn = BankConnection.query.get_or_404(connection_id)
 
     if conn.status != "connected":
@@ -582,6 +331,8 @@ def sync_connection(connection_id):
 
 @app.post("/connections/<int:connection_id>/reconnect")
 def reconnect_connection(connection_id):
+    if not app.config["ENABLE_DEV_TOOLS"]:
+        abort(404)
     conn = BankConnection.query.get_or_404(connection_id)
     conn.status = "connected"
     db.session.commit()
@@ -665,7 +416,8 @@ def import_csv():
         if not account:
             account = Account(name=account_name)
             db.session.add(account)
-            db.session.commit()
+            #keeps the entire import operation inside one database transaction.
+            db.session.flush()
 
     # Auto-detect account if user didn't provide one
     elif rows:
@@ -674,9 +426,23 @@ def import_csv():
             str(r.get("description") or r.get("omschrijving") or r.get("details") or "")
             for r in rows[:10]
         )
+        #This ensures automatically detected
+        # transactions are actually connected to the detected account.
+        # And we actually use the Account Object
+        bank = detect_bank_from_text(probe)
 
-        bank = detect_bank_from_text(probe) or "Unknown bank"
-        account_name = bank
+        if bank:
+            account = Account.query.filter_by(
+                name=bank
+            ).first()
+
+            if not account:
+                account = Account(
+                    name=bank,
+                    institution=bank,
+                )
+                db.session.add(account)
+                db.session.flush()
 
     # Create the batch BEFORE looping
     batch = ImportBatch(
@@ -695,52 +461,62 @@ def import_csv():
 
     for r in rows:
         nr = normalize_transaction_row(r)
-        fp_source = f"{nr['posted_date']}|{nr['amount']}|{nr.get('currency', 'EUR')}|{nr.get('merchant', '')}|{nr.get('description', '')}|{account.id if account else ''}"
-        fingerprint = hashlib.sha256(fp_source.encode("utf-8")).hexdigest()
 
-        # skip if already imported
-        if Transaction.query.filter_by(fingerprint=fingerprint).first():
-            skipped += 1
-            continue
-
+        # Invalid or incomplete row
         if not nr:
             skipped += 1
             continue
 
-        nr["description"] = clean_note(nr.get("description", ""))
-        nr["merchant"] = normalize_merchant_name(nr.get("merchant"))
+        nr["description"] = clean_note(
+            nr.get("description", "")
+        )
+        nr["merchant"] = normalize_merchant_name(
+            nr.get("merchant")
+        )
 
-        # 1) Try rules first
-        matched_category = apply_rules_to_row(nr["merchant"], nr["description"])
-
-        # 2) Fallback to guess_category if no rule
-        if matched_category:
-            category = matched_category
-            cat_name = category.name
-        else:
-            cat_name = guess_category(nr["merchant"], nr["description"])
-            category = Category.query.filter_by(name=cat_name).first()
-            if not category:
-                category = Category(name=cat_name)
-                db.session.add(category)
-                db.session.flush() # gets id without committing
-
+        # Use one verified fingerprint implementation
         fp = tx_fingerprint(
             account.id if account else None,
             nr["posted_date"],
             nr["amount"],
             nr["merchant"],
-            nr["description"]
+            nr["description"],
         )
 
-        # Fast pre-check (optional but nice)
+        # Skip already stored transaction
         exists = Transaction.query.filter_by(
-            account_id=(account.id if account else None),
             fingerprint=fp
         ).first()
+
         if exists:
             duplicates += 1
             continue
+
+        # Try user rules first
+        matched_category = apply_rules_to_row(
+            nr["merchant"],
+            nr["description"],
+        )
+
+        if matched_category:
+            category = matched_category
+        else:
+            category_name = guess_category(
+                nr["merchant"],
+                nr["description"],
+            )
+
+            if category_name == "Uncategorized":
+                category = None
+            else:
+                category = Category.query.filter_by(
+                    name=category_name
+                ).first()
+
+                if not category:
+                    category = Category(name=category_name)
+                    db.session.add(category)
+                    db.session.flush()
 
         tx = Transaction(
             posted_date=nr["posted_date"],
@@ -749,17 +525,21 @@ def import_csv():
             amount=nr["amount"],
             currency=nr["currency"],
             account_id=account.id if account else None,
-            category_id = category.id if category and category.name != "Uncategorized" else None,
-            fingerprint = fp,
+            category_id=category.id if category else None,
+            fingerprint=fp,
             import_batch_id=batch.id,
         )
 
-        db.session.add(tx)
         try:
-            db.session.flush()  # triggers unique constraint early
+            # Savepoint: if this row fails, do not rollback
+            # the complete import batch.
+            with db.session.begin_nested():
+                db.session.add(tx)
+                db.session.flush()
+
             inserted += 1
+
         except IntegrityError:
-            db.session.rollback()  # rollback failed insert only
             duplicates += 1
 
         # store stats on the batch
@@ -804,9 +584,28 @@ def undo_import(batch_id):
 
 @app.post("/dev/reset-transactions")
 def dev_reset_transactions():
-    Transaction.query.delete()
-    db.session.commit()
-    flash("Deleted all transactions.", "success")
+    if not app.config["ENABLE_DEV_TOOLS"]:
+        abort(404)
+
+    try:
+        # Transactions reference import batches, so delete them first.
+        Transaction.query.delete(synchronize_session=False)
+
+        # Clear old import-history records for a clean demo.
+        ImportBatch.query.delete(synchronize_session=False)
+
+        db.session.commit()
+
+        flash(
+            "Transactions and import history were cleared. "
+            "Rules, categories, budgets, and accounts were preserved.",
+            "success",
+        )
+
+    except Exception:
+        db.session.rollback()
+        flash("The demo data could not be reset.", "error")
+
     return redirect(url_for("transactions"))
 
 @app.get("/categories")
@@ -858,12 +657,12 @@ def create_category():
 
     if name.lower() == "uncategorized":
         flash("You can't create a category named 'Uncategorized'. Use the default option.", "error")
-        return redirect(url_for("transactions"))
+        return redirect(url_for("categories_page"))
 
     db.session.add(Category(name=name))
     db.session.commit()
     flash(f"Created category: {name}", "success")
-    return redirect(url_for("transactions"))
+    return redirect(url_for("categories_page"))
 
 #Now we will be able to create/rename/and delete categories in the interface
 @app.post("/categories/<int:cat_id>/rename")
@@ -883,20 +682,71 @@ def rename_category(cat_id: int):
     cat.name = new_name
     db.session.commit()
     flash("Category renamed.", "success")
-    return redirect(url_for("transactions"))
+    return redirect(url_for("categories_page"))
 
 
 @app.post("/categories/<int:cat_id>/delete")
 def delete_category(cat_id: int):
-    cat = Category.query.get_or_404(cat_id)
+    category = Category.query.get_or_404(cat_id)
 
-    # Unassign from transactions first (avoid FK errors)
-    Transaction.query.filter_by(category_id=cat.id).update({"category_id": None})
+    try:
+        # Keep transactions but mark them as Uncategorized.
+        transaction_count = Transaction.query.filter_by(
+            category_id=category.id
+        ).count()
 
-    db.session.delete(cat)
-    db.session.commit()
-    flash("Category deleted (transactions set to Uncategorized).", "success")
-    return redirect(url_for("transactions"))
+        Transaction.query.filter_by(
+            category_id=category.id
+        ).update(
+            {"category_id": None},
+            synchronize_session=False,
+        )
+
+        # Rules cannot exist without a category.
+        rule_count = Rule.query.filter_by(
+            category_id=category.id
+        ).count()
+
+        Rule.query.filter_by(
+            category_id=category.id
+        ).delete(
+            synchronize_session=False
+        )
+
+        # Budgets also cannot exist without a category.
+        budget_count = Budget.query.filter_by(
+            category_id=category.id
+        ).count()
+
+        Budget.query.filter_by(
+            category_id=category.id
+        ).delete(
+            synchronize_session=False
+        )
+
+        category_name = category.name
+
+        db.session.delete(category)
+        db.session.commit()
+
+        flash(
+            f'Deleted category "{category_name}". '
+            f"{transaction_count} transactions were set to Uncategorized, "
+            f"{rule_count} rules were removed, and "
+            f"{budget_count} budgets were removed.",
+            "success",
+        )
+
+    except IntegrityError:
+        db.session.rollback()
+
+        flash(
+            "The category could not be deleted because it is still "
+            "referenced by another record.",
+            "error",
+        )
+
+    return redirect(url_for("categories_page"))
 
 @app.route("/budgets", methods=["GET", "POST"])
 def budgets():
@@ -906,9 +756,10 @@ def budgets():
     year = int(request.args.get("year", date.today().year))
     month = int(request.args.get("month", date.today().month))
 
-    start_date = date(year, month, 1)
-    last_day = calendar.monthrange(year, month)[1]
-    end_date = date(year, month, last_day)
+    # start_date = date(year, month, 1)
+    # last_day = calendar.monthrange(year, month)[1]
+    # end_date = date(year, month, last_day)
+    start_date, next_month = month_bounds(year, month)
 
     categories = Category.query.filter(Category.name != "Transfers").order_by(Category.name).all()
 
@@ -956,7 +807,7 @@ def budgets():
         )
         .filter(
             Transaction.posted_date >= start_date,
-            Transaction.posted_date <= end_date,
+            Transaction.posted_date < next_month,
             Transaction.category_id.isnot(None),
         )
         .group_by(Transaction.category_id)
@@ -994,21 +845,23 @@ def reports():
     month = int(request.args.get("month", date.today().month))
     trend_n = int(request.args.get("trend", 6))  #  3/6/12 toggle
 
-    start_date = date(year, month, 1)
-    last_day = calendar.monthrange(year, month)[1]
-    end_date = date(year, month, last_day)
+    # start_date = date(year, month, 1)
+    # last_day = calendar.monthrange(year, month)[1]
+    # end_date = date(year, month, last_day)
+    start_date, next_month = month_bounds(year, month)
 
     income = db.session.query(func.coalesce(func.sum(Transaction.amount), 0)) \
         .filter(
             Transaction.posted_date >= start_date,
-            Transaction.posted_date <= end_date,
+            Transaction.posted_date <= next_month,
             Transaction.amount > 0
         ).scalar()
 
     expenses = db.session.query(func.coalesce(func.sum(-Transaction.amount), 0)) \
         .filter(
             Transaction.posted_date >= start_date,
-            Transaction.posted_date <= end_date,
+
+            Transaction.posted_date < next_month,
             Transaction.amount < 0
         ).scalar()
 
@@ -1023,7 +876,7 @@ def reports():
     ).join(Transaction, Transaction.category_id == Category.id) \
      .filter(
          Transaction.posted_date >= start_date,
-         Transaction.posted_date <= end_date,
+        Transaction.posted_date < next_month,
          Transaction.amount < 0
      ) \
      .group_by(Category.name) \
@@ -1266,4 +1119,4 @@ with app.app_context():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=app.config["DEBUG"],)

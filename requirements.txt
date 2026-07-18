@@ -5,4 +5,5 @@ python-dateutil
 pandas
 openpyxl
 xlrd
-
+pytest
+python-dotenv
