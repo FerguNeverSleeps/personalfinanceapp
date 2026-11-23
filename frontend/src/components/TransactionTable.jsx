@@ -1,6 +1,16 @@
 import TransactionRow from "./TransactionRow";
 
-export default function TransactionTable() {
+export default function TransactionTable({transactions}) {
+  const transactionElements = transactions.map((transaction) => (
+    <TransactionRow
+        key={transaction.id}
+        date={transaction.date}
+        merchant={transaction.merchant}
+        category={transaction.category}
+        amount={transaction.amount}
+        account={transaction.account}
+      />
+  ))
   return (
     <section className="transaction-table">
       <div className="transaction-row transaction-header">
@@ -10,30 +20,17 @@ export default function TransactionTable() {
         <div>Amount</div>
         <div>Account</div>
       </div>
+      {/* conditional rendering by getting the length of the transactions and printing
+      no transactions found when the length is <= 0 */}
+      {transactions.length > 0 ? (
+      transactionElements
+    ) : (
+      <div className="empty-state">
+        No transactions found.
+      </div>
+    )}
 
-      <TransactionRow
-        date="2026-07-25"
-        merchant="Orion Systems BV"
-        category="Income"
-        amount={2850}
-        account="Demo Current Account"
-      />
-
-      <TransactionRow
-        date="2026-07-23"
-        merchant="Northstar Market"
-        category="Groceries"
-        amount={-72.78}
-        account="Demo Current Account"
-      />
-
-      <TransactionRow
-        date="2026-07-21"
-        merchant="Metro OV Pass"
-        category="Transport"
-        amount={-18.3}
-        account="Demo Current Account"
-      />
+      
     </section>
   );
 }

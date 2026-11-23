@@ -1,4 +1,4 @@
-export default transactions;
+
 const transactions = [
   {
     id: 1,
@@ -36,8 +36,31 @@ const transactions = [
     id: 5,
     date: "2026-07-20",
     merchant: "Arcade Game Hall",
-    category: "Leisure",
+    category: "Uncategorized",
     amount: -31.0,
     account: "Demo Current Account",
   },
+
+  {
+    id: 6,
+    date: "2026-07-18",
+    merchant: "Interest Payment",
+    category: "Income",
+    amount: 4.25,
+    account: "Demo Savings Account",
+  },
+
+  {
+    id: 7,
+    date: "2026-07-17",
+    merchant: "StreamFlix",
+    category: "Entertainment",
+    amount: -12.99,
+    account: "Demo Credit Card",
+  },
+  
 ];
+
+
+
+export default transactions;
