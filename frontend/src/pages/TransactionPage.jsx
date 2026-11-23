@@ -12,16 +12,16 @@ export default function TransactionsPage() {
   // convert the set back into an array with [...new Set(...)]
   const categories = [
     ...new Set(
-        transactions.map((transaction) => transaction.category)
+        transactionList.map((transaction) => transaction.category)
     )
   ]
 
   const accounts = [
     ...new Set(
-      transactions.map((transaction) => transaction.account)
+      transactionList.map((transaction) => transaction.account)
     )
   ]
-  const filteredTransactions = transactions.filter((transaction) =>{
+  const filteredTransactions = transactionList.filter((transaction) =>{
   const matchesSearch = transaction.merchant
       .toLowerCase()
       .includes(search.toLowerCase())
@@ -117,6 +117,7 @@ export default function TransactionsPage() {
 
       <TransactionTable transactions={filteredTransactions} 
       updateCategory={updateCategory}
+      categories={categories}
       />
     </main>
   );
