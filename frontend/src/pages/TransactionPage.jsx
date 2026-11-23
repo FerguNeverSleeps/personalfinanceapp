@@ -54,7 +54,7 @@ export default function TransactionsPage() {
       <div className="transaction-toolbar">
         <select
           value={view}
-          onChange={(event) => setView(event.arget.value)}
+          onChange={(event) => setView(event.target.value)}
         >
           <option value="all">All transactions</option>
           <option value="uncategorized">Uncategorized only</option>
