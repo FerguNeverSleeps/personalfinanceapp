@@ -1,14 +1,11 @@
 import TransactionRow from "./TransactionRow";
 
-export default function TransactionTable({transactions}) {
+export default function TransactionTable({transactions, updateCategory}) {
   const transactionElements = transactions.map((transaction) => (
     <TransactionRow
         key={transaction.id}
-        date={transaction.date}
-        merchant={transaction.merchant}
-        category={transaction.category}
-        amount={transaction.amount}
-        account={transaction.account}
+        {...transaction}
+        updateCategory={updateCategory}
       />
   ))
   return (

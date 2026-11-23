@@ -7,6 +7,7 @@ export default function TransactionsPage() {
   const [view, setView] = useState("all")
   const [category, setCategory] = useState("all")
   const [account, setAccount] = useState("all")
+  const [transactionList, setTransactionList] = useState(transactions)
   //convert categories into a set to remove duplicates and 
   // convert the set back into an array with [...new Set(...)]
   const categories = [
@@ -41,6 +42,19 @@ export default function TransactionsPage() {
 
   return matchesSearch && matchesView && matchesCategory && matchesAccount
   })
+
+  function updateCategory(id, newCategory) {
+    setTransactionList((prevTransactions) =>
+      prevTransactions.map((transaction) =>
+          transaction.id === id
+              ? {
+                  ...transaction,
+                  category: newCategory,
+              }
+              : transaction
+      )
+    )
+  }
 
   
 
@@ -101,7 +115,9 @@ export default function TransactionsPage() {
         ))}
       </select>
 
-      <TransactionTable transactions={filteredTransactions} />
+      <TransactionTable transactions={filteredTransactions} 
+      updateCategory={updateCategory}
+      />
     </main>
   );
 }
