@@ -1,4 +1,5 @@
 export default function TransactionRow({
+  id,
   date,
   merchant,
   category,

@@ -1,5 +1,6 @@
 import { useState } from "react"
 import transactions from "../data/transactions"
+import categories from "../data/categories"
 import TransactionTable from "../components/TransactionTable"
 
 export default function TransactionsPage() {
@@ -10,11 +11,7 @@ export default function TransactionsPage() {
   const [transactionList, setTransactionList] = useState(transactions)
   //convert categories into a set to remove duplicates and 
   // convert the set back into an array with [...new Set(...)]
-  const categories = [
-    ...new Set(
-        transactionList.map((transaction) => transaction.category)
-    )
-  ]
+  
 
   const accounts = [
     ...new Set(

@@ -6,7 +6,7 @@ export default function TransactionTable({transactions, updateCategory, categori
         key={transaction.id}
         {...transaction}
         updateCategory={updateCategory}
-        category={categories}
+        categories={categories}
       />
   ))
   return (
